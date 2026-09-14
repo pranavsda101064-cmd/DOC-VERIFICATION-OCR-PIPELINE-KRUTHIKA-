@@ -1,193 +1,220 @@
-# DocScreen — AI-Based Fake Identity & Document Screening System
-### SIH 2026 Prototype
-
-> **Multi-Layer AI Document Intelligence and Risk Screening**
-> Signal Fusion Risk Engine · Explainable AI · Human-in-the-Loop
+# DocScreen — AI Document Fraud Screening System
+### Step-by-Step Setup & Usage Guide · SIH 2026
 
 ---
 
-## 🏗 Architecture
+## 📋 What is DocScreen?
 
-```
-User → Next.js Frontend → FastAPI Backend → Analysis Pipeline
-                                               ├── Preprocessor (OpenCV, PIL)
-                                               ├── OCR Engine (Tesseract → EasyOCR fallback)
-                                               ├── Template Classifier (CV + keywords)
-                                               ├── Pattern Engine (regex + temporal rules)
-                                               ├── Forensic Engine (noise/ELA/edge analysis)
-                                               ├── QR Engine (pyzbar + cross-field check)
-                                               ├── Consistency Engine (cross-field logic)
-                                               └── Anomaly Engine (Isolation Forest)
-                                                        ↓
-                                               Risk Engine (weighted signal fusion)
-                                                        ↓
-                                               Human Verification → SQLite DB
-```
+DocScreen is an AI-powered system that detects fake and tampered identity documents (Aadhaar, PAN, Voter ID, etc.). It uses 8 forensic analysis engines — computer vision, OCR, machine learning (Isolation Forest), and metadata forensics — to produce a **0–100 Risk Score** with a transparent explanation of every flag it raises.
 
 ---
 
-## ⚡ Quick Start
+## ⚙️ Prerequisites — Install These First
 
-### Prerequisites
+| Tool | Version | Where to Get |
+|------|---------|--------------|
+| Python | 3.11 or higher | https://www.python.org/downloads/ |
+| Node.js | 18 or higher | https://nodejs.org/ |
+| Tesseract OCR | Latest | `choco install tesseract` (or download from GitHub UB-Mannheim) |
+| Git (optional) | Any | https://git-scm.com/ |
 
-| Requirement | Install |
-|---|---|
-| Python 3.11+ | python.org |
-| Node.js 18+ | nodejs.org |
-| Tesseract OCR | `choco install tesseract` (Windows) or `apt install tesseract-ocr` (Linux) |
-| libzbar (for QR) | `choco install zbar` (Windows) or `apt install libzbar0` (Linux) |
+> **Windows Tip:** After installing Python, make sure to tick **"Add Python to PATH"** in the installer.
 
-### Backend Setup
+---
+
+## 🚀 Step 1: Start the Entire Application (1 Click)
+
+**Double-click** the file:
+```
+start_docscreen.bat
+```
+
+This single file automatically:
+1. Starts the **FastAPI Backend** on `http://localhost:8000`
+2. Starts the **Next.js Frontend** on `http://localhost:3000`
+3. Waits 6 seconds for both servers to initialize
+4. **Opens DocScreen in Zen Browser** (or your default browser)
+
+> ⚠️ Keep both black terminal windows open while using the app. Closing them stops the servers.
+
+---
+
+## 🔧 Step 2: First-Time Setup Only (Do This Once)
+
+If you are running DocScreen for the first time:
+
+### 2A — Set Up the Backend
+
+Open a terminal, navigate to the `backend/` folder, and run:
 
 ```bash
+# Go into backend folder
 cd backend
+
+# Create a virtual environment
 python -m venv venv
 
-# Windows
+# Activate it (Windows)
 venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
 
+# Install all Python dependencies
 pip install -r requirements.txt
-cp .env.example .env
 
-# Generate synthetic demo documents
-python ..\scripts\generate_demo_documents.py
+# Generate synthetic demo documents (creates data/synthetic/ folder)
+cd ..
+python scripts\generate_demo_documents.py
 
-# Train anomaly model
-python ..\scripts\train_anomaly_model.py
-
-# Start backend
-uvicorn app.main:app --reload --port 8000
+# Train the ML anomaly model (creates models_store/isolation_forest.pkl)
+python scripts\train_anomaly_model.py
 ```
 
-Backend runs at: http://localhost:8000
-API Docs (Swagger): http://localhost:8000/docs
+> ✅ After this, the `models_store/` folder will contain `isolation_forest.pkl` and `data/synthetic/` will have 8 demo documents.
 
-### Frontend Setup
+### 2B — Set Up the Frontend
 
 ```bash
+# Go into frontend folder
 cd frontend
+
+# Install Node.js packages
 npm install
-npm run dev
 ```
 
-Frontend runs at: http://localhost:3000
+> ✅ This creates the `node_modules/` folder. Only needs to be done once.
 
 ---
 
-## 🎮 Demo Flow (SIH 90-second demo)
+## 🎮 Step 3: Using the Website — Full Demo Flow
 
-1. Open http://localhost:3000
-2. Click **Demo Mode → Authentic Document** → expect 🟢 LOW RISK ~12/100
-3. Click **Demo Mode → Text Tampered** → expect 🔴 HIGH RISK ~84/100
-4. Open **Key Findings** → see tamper + OCR anomalies
-5. Open **OCR Fields** → click a field → bbox highlights
-6. Open **Risk Score Breakdown** → see weighted signal breakdown
-7. Click **Manual Verification** → Reject → logged to DB
+Once the site opens at **http://localhost:3000**, follow this sequence:
 
----
+### 3A — Analyze a Document (Upload)
+1. Click **"Analyze"** in the left sidebar.
+2. Click the **upload zone** and select any identity document image (JPG, PNG, PDF).
+3. Watch the **13-layer pipeline** process in real time (Visual → OCR → Forensics → ML → Risk Fusion).
+4. View your **Risk Score** and the breakdown of findings.
 
-## 📡 API Reference
+### 3B — Demo Mode (No Upload Needed — Best for Demos)
+1. On the Analyze page, click **"Demo Mode"** button at the top right.
+2. Pick a scenario:
+   - **Authentic Aadhaar** → Expected: 🟢 LOW RISK (~12/100)
+   - **Text Tampered PAN** → Expected: 🔴 HIGH RISK (~84/100)
+   - **Forged Date Voter ID** → Expected: 🔴 HIGH RISK (~78/100)
 
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/api/analyze` | POST | Upload + analyze document |
-| `/api/analysis/{id}` | GET | Get analysis result |
-| `/api/documents` | GET | List all documents |
-| `/api/risk-queue` | GET | Pending review queue |
-| `/api/review` | POST | Submit human decision |
-| `/api/compare` | POST | Compare two analyses |
-| `/api/analytics` | GET | Aggregated stats |
-| `/api/demo/documents` | GET | List 8 demo docs |
-| `/api/demo/run/{name}` | POST | Run demo pipeline |
-| `/api/health` | GET | System health check |
+### 3C — Inspect the Evidence (Explainable AI)
+After any analysis, explore the result tabs:
+- **Key Findings** → See exactly which forensic signals fired and why.
+- **OCR Fields** → Click any extracted field (Name, DOB, ID Number) to highlight its bounding box on the document image.
+- **Risk Score Breakdown** → See the weighted contribution of all 8 forensic engines.
 
----
+### 3D — Human Review (HITL)
+1. Click **"Review Document"** button.
+2. Choose **Approve**, **Reject**, or **Request More Info**.
+3. Add optional reviewer notes.
+4. Click **Submit** — the decision is logged to the database immediately.
 
-## 🔬 Risk Score Signals
-
-| Signal | Weight |
-|---|---|
-| Visual Tamper | 25% |
-| Template / Layout | 15% |
-| Cross-Field Consistency | 15% |
-| ML Anomaly (Isolation Forest) | 15% |
-| OCR Anomalies | 10% |
-| Pattern Violations | 10% |
-| Metadata Anomalies | 5% |
-| Image Quality | 5% |
-
-**Thresholds:** 0–30 = LOW · 31–65 = MEDIUM · 66–100 = HIGH
+### 3E — Other Features
+| Page | URL | What It Does |
+|------|-----|-------------|
+| Risk Queue | `/risk-queue` | Shows all Medium/High risk docs pending human review |
+| Analytics | `/analytics` | Live charts — fraud rates, risk distribution, engine stats |
+| Documents | `/documents` | Full history of every document ever analyzed |
+| Compare | `/compare` | Side-by-side comparison of two documents |
+| Settings | `/settings` | Backend health check, API status, configuration |
 
 ---
 
-## 🚀 Switching to Gemini Pro
+## 🩺 Step 4: Health Check
 
-After validating the logic, replace `backend/app/ocr/structured_extractor.py`'s
-`extract_fields()` function with a Gemini Pro vision-language call.
+Verify everything is running correctly:
 
-The integration point is clearly documented in the file:
-```python
-# ── INTEGRATION POINT FOR GEMINI PRO ──
-# Replace this function body with:
-#   from app.ocr.gemini_extractor import extract_fields_gemini
-#   return extract_fields_gemini(ocr_result, image_bytes)
-```
-
-This single swap replaces brittle regex parsing with robust vision-language extraction
-with **zero architectural changes** to the rest of the pipeline.
-
----
-
-## 🐳 Docker
-
-```bash
-# Generate demo docs + train model first
-cd backend && python ../scripts/generate_demo_documents.py
-cd backend && python ../scripts/train_anomaly_model.py
-
-# Build and run
-docker-compose up --build
-```
-
----
-
-## ⚠️ Disclaimer
-
-This is a **prototype for SIH 2026**. It is:
-- NOT suitable for production government use
-- NOT a legal document authenticator
-- Using ONLY synthetic/fictional documents
-- Designed as a **decision-support screening tool**
-
-All documents in DEMO MODE use fictional names, fictional IDs, and fictional addresses.
+| Check | URL | Expected |
+|-------|-----|----------|
+| Frontend | http://localhost:3000 | DocScreen dashboard loads |
+| Backend Health | http://localhost:8000/api/health | `{"status": "healthy"}` |
+| Swagger API Docs | http://localhost:8000/docs | Full interactive API docs |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-PJS/
-├── backend/
+DocScreen/
+├── backend/                    ← FastAPI Python backend
 │   ├── app/
-│   │   ├── api/routes/      # FastAPI route handlers
-│   │   ├── anomaly/         # Isolation Forest detector
-│   │   ├── core/            # Config, DB engine
-│   │   ├── forensics/       # EXIF/metadata analysis
-│   │   ├── models/          # SQLAlchemy ORM
-│   │   ├── ocr/             # OCR engines + field extractor
-│   │   ├── pipelines/       # Main pipeline, pattern/QR/consistency
-│   │   ├── risk/            # Risk engine
-│   │   ├── templates/       # Template store, classifier, layout
-│   │   └── vision/          # Preprocessor, tamper detector
-│   └── main.py
-├── frontend/
-│   ├── app/                 # Next.js app router pages
-│   └── components/          # Shared React components
+│   │   ├── api/routes/         ← API endpoints (analyze, review, demo, etc.)
+│   │   ├── anomaly/            ← Isolation Forest ML model loader
+│   │   ├── forensics/          ← EXIF/metadata analysis
+│   │   ├── ocr/                ← Tesseract + RapidOCR engines
+│   │   ├── pipelines/          ← Main 13-stage inspection pipeline
+│   │   ├── risk/               ← Risk fusion engine (weighted scoring)
+│   │   ├── templates/          ← Template classifier and layout validator
+│   │   └── vision/             ← OpenCV preprocessor + ELA tamper detector
+│   ├── requirements.txt        ← Python dependencies
+│   └── Dockerfile              ← Docker container definition
+│
+├── frontend/                   ← Next.js React frontend
+│   ├── app/                    ← Pages (analyze, risk-queue, analytics, etc.)
+│   ├── components/             ← UI components (stepper, review modal, OCR panel)
+│   ├── lib/api.ts              ← API client (connects frontend to backend)
+│   └── package.json            ← Node.js dependencies
+│
 ├── scripts/
-│   ├── generate_demo_documents.py
-│   ├── train_anomaly_model.py
-│   └── evaluate_model.py
-└── data/synthetic/          # Generated demo documents
+│   ├── generate_demo_documents.py  ← Creates 8 synthetic demo documents
+│   ├── train_anomaly_model.py      ← Trains the Isolation Forest model
+│   └── evaluate_model.py          ← Evaluates model performance
+│
+├── data/synthetic/             ← Auto-generated demo document images
+├── models_store/               ← Trained ML model (isolation_forest.pkl)
+│
+├── start_docscreen.bat         ← 1-click launcher (double-click to start)
+├── docker-compose.yml          ← Docker multi-service setup
+└── render.yaml                 ← Render.com cloud deployment config
 ```
+
+---
+
+## 🌐 Online Deployment
+
+DocScreen is deployed live at:
+- **Frontend:** https://docscreen-frontend.onrender.com
+- **Backend API:** https://docscreen-backend.onrender.com
+- **API Docs (live):** https://docscreen-backend.onrender.com/docs
+
+> ⚠️ Render free tier may take 30–60 seconds to wake up on first visit (cold start).
+
+---
+
+## 🔬 Risk Score Signals Reference
+
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Visual Tamper & ELA | 25% | Error Level Analysis, edge noise, copy-move detection |
+| Template & Layout | 15% | Aspect ratio, emblem alignment, header validation |
+| Cross-Field Consistency | 15% | DOB vs Age, PAN checksum, semantic coherence |
+| ML Anomaly (Isolation Forest) | 15% | Zero-day outlier detection using trained model |
+| OCR & Text Anomalies | 10% | Confidence scores, font inconsistency, encoding errors |
+| Pattern & Temporal | 10% | Regex conformity, future issue dates, sequence logic |
+| Metadata & EXIF | 5% | Photoshop/GIMP signatures, missing camera profiles |
+| Image Quality | 5% | Blur variance, contrast, glare detection |
+
+**Thresholds:**  
+🟢 0–30 = LOW RISK · 🟡 31–65 = MEDIUM RISK · 🔴 66–100 = HIGH RISK
+
+---
+
+## 🆘 Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Backend terminal shows `ModuleNotFoundError` | Run `pip install -r requirements.txt` in `backend/` with venv activated |
+| Frontend shows "Cannot connect" | Make sure backend is running at port 8000 |
+| `isolation_forest.pkl` not found | Run `python scripts\train_anomaly_model.py` from root |
+| Tesseract not found error | Install Tesseract and add it to Windows PATH |
+| Port 8000 already in use | Close any other running backend or use `npx kill-port 8000` |
+
+---
+
+## ⚠️ Disclaimer
+
+DocScreen is a **prototype for SIH 2026**. It uses entirely **synthetic, fictional demo documents** and is intended as a decision-support screening tool for academic and research purposes only. It is NOT a legally certified document authenticator and should NOT be used in production government contexts without appropriate validation.
