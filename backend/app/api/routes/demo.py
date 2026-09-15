@@ -234,6 +234,7 @@ async def run_demo(doc_name: str, db: AsyncSession = Depends(get_db)):
         return {
             "analysis_id": analysis_id,
             "document_id": doc_id,
+            "original_filename": dest.name,
             "demo_doc": demo_doc,
             "result": pipeline_result,
         }

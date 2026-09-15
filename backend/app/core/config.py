@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     OCR_ENGINE: str = "auto"
     CORS_ORIGINS: str = "http://localhost:3000"
     MODEL_PATH: str = "./models_store/isolation_forest.pkl"
-    DEMO_DOCS_DIR: str = "../data/synthetic"
+    DEMO_DOCS_DIR: str = "./data/synthetic"
 
     @property
     def upload_path(self) -> Path:

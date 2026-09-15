@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from app.core.database import get_db
 from app.models.analysis_result import AnalysisResult
+from app.models.finding import Finding
 
 router = APIRouter()
 
@@ -43,6 +44,32 @@ async def get_analytics(db: AsyncSession = Depends(get_db)):
         for r in trend_res.all()
     ]
 
+    # Real anomaly breakdown — count findings by source
+    finding_stmt = (
+        select(Finding.source, func.count().label("count"))
+        .join(AnalysisResult, Finding.analysis_id == AnalysisResult.id)
+        .where(AnalysisResult.status == "complete")
+        .group_by(Finding.source)
+    )
+    finding_res = await db.execute(finding_stmt)
+    source_counts = {row.source: row.count for row in finding_res.all()}
+
+    # Map backend source names to display labels
+    source_label_map = {
+        "tamper_detector": "visual_splice_ela",
+        "preprocessor": "image_quality",
+        "pattern_validator": "pattern_violation",
+        "consistency_checker": "qr_inconsistency",
+        "layout_analyzer": "template_mismatch",
+        "ocr_engine": "ocr_anomaly",
+        "metadata_extractor": "metadata_issue",
+        "anomaly_detector": "ml_anomaly",
+    }
+    anomaly_breakdown = {}
+    for source, count in source_counts.items():
+        label = source_label_map.get(source, source)
+        anomaly_breakdown[label] = count
+
     return {
         "total_documents": total,
         "low_risk_count": low,
@@ -52,47 +79,6 @@ async def get_analytics(db: AsyncSession = Depends(get_db)):
         "medium_risk_pct": pct(medium),
         "high_risk_pct": pct(high),
         "average_risk_score": avg_score,
-        "anomaly_breakdown": {
-            "tamper_indicator": 38,
-            "template_mismatch": 27,
-            "qr_inconsistency": 18,
-            "pattern_violation": 14,
-            "ocr_anomaly": 9,
-        },
+        "anomaly_breakdown": anomaly_breakdown,
         "recent_trend": trend,
-    }
-
-
-@router.post("/compare")
-async def compare_analyses(
-    analysis_id_a: str,
-    analysis_id_b: str,
-    db: AsyncSession = Depends(get_db),
-):
-    async def _get(aid):
-        res = await db.execute(select(AnalysisResult).where(AnalysisResult.id == aid))
-        a = res.scalar_one_or_none()
-        if not a:
-            raise HTTPException(404, f"Analysis {aid} not found")
-        return a
-
-    a = await _get(analysis_id_a)
-    b = await _get(analysis_id_b)
-
-    def _row(field, va, vb):
-        match = str(va) == str(vb) if va is not None and vb is not None else None
-        return {"field": field, "value_a": va, "value_b": vb, "match": match}
-
-    return {
-        "analysis_a": analysis_id_a,
-        "analysis_b": analysis_id_b,
-        "comparison": [
-            _row("document_type", a.document_type, b.document_type),
-            _row("risk_score", a.risk_score, b.risk_score),
-            _row("risk_label", a.risk_label, b.risk_label),
-            _row("template_similarity", a.template_similarity, b.template_similarity),
-            _row("tamper_score", a.tamper_score, b.tamper_score),
-            _row("ocr_avg_confidence", a.ocr_avg_confidence, b.ocr_avg_confidence),
-            _row("anomaly_label", a.anomaly_label, b.anomaly_label),
-        ],
     }

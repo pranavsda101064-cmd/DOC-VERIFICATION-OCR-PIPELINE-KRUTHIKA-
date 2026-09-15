@@ -32,6 +32,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
 
+    # Seed mock data if DB is empty
+    from app.seed import seed_if_empty
+    await seed_if_empty()
+
     # Load ML model
     loaded = load_model()
     logger.info(f"ML model loaded: {loaded}")

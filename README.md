@@ -1,11 +1,11 @@
-# DocScreen — AI Document Fraud Screening System
+# Abhaya — AI Document Fraud Screening System
 ### Step-by-Step Setup & Usage Guide · SIH 2026
 
 ---
 
-## 📋 What is DocScreen?
+## 📋 What is Abhaya?
 
-DocScreen is an AI-powered system that detects fake and tampered identity documents (Aadhaar, PAN, Voter ID, etc.). It uses 8 forensic analysis engines — computer vision, OCR, machine learning (Isolation Forest), and metadata forensics — to produce a **0–100 Risk Score** with a transparent explanation of every flag it raises.
+Abhaya is an AI-powered system that detects fake and tampered identity documents (Aadhaar, PAN, Voter ID, etc.). It uses 8 forensic analysis engines — computer vision, OCR, machine learning (Isolation Forest), and metadata forensics — to produce a **0–100 Risk Score** with a transparent explanation of every flag it raises.
 
 ---
 
@@ -33,7 +33,7 @@ This single file automatically:
 1. Starts the **FastAPI Backend** on `http://localhost:8000`
 2. Starts the **Next.js Frontend** on `http://localhost:3000`
 3. Waits 6 seconds for both servers to initialize
-4. **Opens DocScreen in Zen Browser** (or your default browser)
+4. **Opens Abhaya in Zen Browser** (or your default browser)
 
 > ⚠️ Keep both black terminal windows open while using the app. Closing them stops the servers.
 
@@ -41,7 +41,7 @@ This single file automatically:
 
 ## 🔧 Step 2: First-Time Setup Only (Do This Once)
 
-If you are running DocScreen for the first time:
+If you are running Abhaya for the first time:
 
 ### 2A — Set Up the Backend
 
@@ -130,7 +130,7 @@ Verify everything is running correctly:
 
 | Check | URL | Expected |
 |-------|-----|----------|
-| Frontend | http://localhost:3000 | DocScreen dashboard loads |
+| Frontend | http://localhost:3000 | Abhaya dashboard loads |
 | Backend Health | http://localhost:8000/api/health | `{"status": "healthy"}` |
 | Swagger API Docs | http://localhost:8000/docs | Full interactive API docs |
 
@@ -139,7 +139,7 @@ Verify everything is running correctly:
 ## 📁 Project Structure
 
 ```
-DocScreen/
+Abhaya/
 ├── backend/                    ← FastAPI Python backend
 │   ├── app/
 │   │   ├── api/routes/         ← API endpoints (analyze, review, demo, etc.)
@@ -176,7 +176,7 @@ DocScreen/
 
 ## 🌐 Online Deployment
 
-DocScreen is deployed live at:
+Abhaya is deployed live at:
 - **Frontend:** https://docscreen-frontend.onrender.com
 - **Backend API:** https://docscreen-backend.onrender.com
 - **API Docs (live):** https://docscreen-backend.onrender.com/docs
@@ -217,4 +217,4 @@ DocScreen is deployed live at:
 
 ## ⚠️ Disclaimer
 
-DocScreen is a **prototype for SIH 2026**. It uses entirely **synthetic, fictional demo documents** and is intended as a decision-support screening tool for academic and research purposes only. It is NOT a legally certified document authenticator and should NOT be used in production government contexts without appropriate validation.
+Abhaya is a **prototype for SIH 2026**. It uses entirely **synthetic, fictional demo documents** and is intended as a decision-support screening tool for academic and research purposes only. It is NOT a legally certified document authenticator and should NOT be used in production government contexts without appropriate validation.

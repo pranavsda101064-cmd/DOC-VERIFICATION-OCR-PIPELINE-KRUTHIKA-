@@ -1,70 +1,97 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getAnalytics, getRiskQueue, getHealth } from "@/lib/api";
 import {
-  AlertTriangle, FileCheck, TrendingUp, Shield, Activity,
-  CheckCircle2, ArrowUpRight, ScanLine, Clock, Zap, Layers,
-  Lock, Terminal, ArrowRight, ShieldCheck, Fingerprint,
-  Sparkles, Check, AlertCircle, RefreshCw
+  AlertTriangle, FileCheck, TrendingUp, ArrowRight,
+  ScanLine
 } from "lucide-react";
 import Link from "next/link";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid
 } from "recharts";
+import { Carousel } from "@/components/Carousel";
+import { motion, AnimatePresence } from "framer-motion";
 
-function BentoStatCard({ label, value, sub, trend, color, icon: Icon }: {
-  label: string; value: any; sub?: string; trend?: string; color: string; icon: any;
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", mass: 0.8, stiffness: 200, damping: 20, delay: i * 0.08 },
+  }),
+};
+
+function StatCard({ label, value, sub, trend, color }: {
+  label: string; value: any; sub?: string; trend?: string; color: string;
 }) {
   return (
-    <div className="bento-card" style={{ padding: "22px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-        <span style={{
-          fontSize: 11, color: "#64748B", fontWeight: 700,
-          letterSpacing: "0.08em", textTransform: "uppercase"
-        }}>
-          {label}
-        </span>
-        <div style={{
-          width: 32, height: 32, borderRadius: "50%",
-          background: `${color}15`,
-          border: `1px solid ${color}35`,
-          display: "flex", alignItems: "center", justifyContent: "center"
-        }}>
-          <Icon size={15} color={color} />
-        </div>
+    <motion.div
+      className="bento-card"
+      whileHover={{ y: -2, scale: 1.01 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      style={{ padding: "18px 20px" }}
+    >
+      <div style={{
+        fontSize: 12, color: "var(--text-muted)", fontWeight: 500,
+        letterSpacing: "0.03em", textTransform: "uppercase", marginBottom: 10
+      }}>
+        {label}
       </div>
-
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <div className="font-mono" style={{
-          fontSize: 34, fontWeight: 800, color: "#ffffff",
-          letterSpacing: "-0.04em", lineHeight: 1
-        }}>
-          {value}
-        </div>
+        <div className="text-kpi">{value}</div>
         {trend && (
           <span style={{
-            fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "999px",
-            background: "rgba(16, 185, 129, 0.12)", color: "#34d399",
-            fontFamily: "JetBrains Mono, monospace"
+            fontSize: 11, fontWeight: 600, padding: "2px 8px",
+            borderRadius: "var(--radius-sm)",
+            background: "var(--risk-low-bg)", color: "var(--risk-low)",
           }}>
             {trend}
           </span>
         )}
       </div>
-
       {sub && (
-        <div style={{ fontSize: 12, color: "#93A3B8", marginTop: 10, fontWeight: 500 }}>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
           {sub}
         </div>
       )}
-
-      {/* NordPixel Subtle Accent Line */}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: 2,
-        background: `linear-gradient(90deg, ${color} 0%, transparent 70%)`
+        background: color, opacity: 0.3
       }} />
-    </div>
+    </motion.div>
+  );
+}
+
+function ChartTabBtn({ active, onClick, icon, label }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
+}) {
+  return (
+    <button
+      className="chart-tab"
+      data-active={active}
+      onClick={onClick}
+      style={{ position: "relative" }}
+    >
+      {active && (
+        <motion.span
+          layoutId="chart-pill"
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "var(--radius-sm)",
+            background: "var(--bg-surface)",
+            boxShadow: "var(--shadow-sm)",
+            zIndex: 0,
+          }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        />
+      )}
+      <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+        {icon}
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -72,547 +99,419 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [queue, setQueue]         = useState<any>(null);
   const [health, setHealth]       = useState<any>(null);
+  const [chartTab, setChartTab]   = useState<"risk" | "threat">("risk");
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     getAnalytics().then(setAnalytics).catch(() => {});
     getRiskQueue().then(setQueue).catch(() => {});
     getHealth().then(setHealth).catch(() => {});
   }, []);
 
-  const hasRealData = analytics && analytics.total_documents > 0;
+  useEffect(() => {
+    loadData();
+
+    const onVisible = () => { if (document.visibilityState === "visible") loadData(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", loadData);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", loadData);
+    };
+  }, [loadData]);
+
   const totalPie = (analytics?.low_risk_count || 0) + (analytics?.medium_risk_count || 0) + (analytics?.high_risk_count || 0);
+  const hasData = totalPie > 0;
 
-  const PIE_DATA = totalPie > 0 ? [
-    { name: "Legitimate (Low)",  value: analytics.low_risk_count,    color: "#10b981" },
-    { name: "Suspect (Medium)", value: analytics.medium_risk_count, color: "#f59e0b" },
-    { name: "Tampered (High)",   value: analytics.high_risk_count,   color: "#f43f5e" },
+  const PIE_DATA = hasData ? [
+    { name: "Low Risk",    value: analytics.low_risk_count,    color: "var(--risk-low)" },
+    { name: "Medium Risk", value: analytics.medium_risk_count, color: "var(--risk-medium)" },
+    { name: "High Risk",   value: analytics.high_risk_count,   color: "var(--risk-high)" },
   ] : [
-    { name: "Legitimate (Low)",  value: 68, color: "#10b981" },
-    { name: "Suspect (Medium)", value: 21, color: "#f59e0b" },
-    { name: "Tampered (High)",   value: 11, color: "#f43f5e" },
+    { name: "Low Risk",    value: 0, color: "var(--risk-low)" },
+    { name: "Medium Risk", value: 0, color: "var(--risk-medium)" },
+    { name: "High Risk",   value: 0, color: "var(--risk-high)" },
   ];
 
-  const hasAnomData = analytics && analytics.anomaly_breakdown && Object.keys(analytics.anomaly_breakdown).length > 0;
-
-  const ANOM_DATA = hasAnomData ? Object.entries(analytics.anomaly_breakdown).map(
-    ([k, v]) => ({ name: k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), value: v })
-  ) : [
-    { name: "Visual Splice (ELA)", value: 14 },
-    { name: "QR Crypt Hash Mismatch", value: 9 },
-    { name: "Font / OCR Discrepancy", value: 7 },
-    { name: "Layout Boundary Shift", value: 4 },
-    { name: "Metadata Inconsistency", value: 2 },
-  ];
+  const anomData = analytics?.anomaly_breakdown && Object.keys(analytics.anomaly_breakdown).length > 0
+    ? Object.entries(analytics.anomaly_breakdown).map(
+        ([k, v]) => ({ name: k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), value: v as number })
+      )
+    : [];
 
   const pendingReview = (queue?.high?.length || 0) + (queue?.medium?.length || 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
 
-      {/* ── 1. NORDPIXEL-STYLE HERO SECTION ── */}
-      <section style={{
-        position: "relative",
-        padding: "48px 0 20px 0",
-        textAlign: "center",
-        maxWidth: 960,
-        margin: "0 auto",
-      }}>
-        {/* NordPixel Large Clean Heading */}
-        <h1 style={{
-          fontSize: "clamp(36px, 5.4vw, 58px)",
-          fontWeight: 800,
-          lineHeight: 1.14,
-          letterSpacing: "-0.035em",
-          color: "#FFFFFF",
-          marginBottom: 18,
-          fontFamily: "'Poppins', sans-serif"
-        }}>
-          Autonomous Multi-Layer <br />
-          <span style={{
-            background: "linear-gradient(135deg, #4272D4 0%, #6FCDA9 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
-          }}>
-            Document Fraud Screening
-          </span>
-          .
-        </h1>
-
-        <p style={{
-          fontSize: "clamp(15px, 1.8vw, 17px)",
-          color: "#93A3B8",
-          lineHeight: 1.6,
+      {/* Hero */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", mass: 0.8, stiffness: 200, damping: 20 }}
+        style={{
+          position: "relative",
+          padding: "24px 0 8px 0",
           maxWidth: 680,
-          margin: "0 auto 32px auto",
-          fontWeight: 400
+          margin: "0 auto",
+          textAlign: "center",
+        }}
+      >
+        <h1 style={{
+          fontSize: "clamp(28px, 4vw, 42px)",
+          fontWeight: 700,
+          lineHeight: 1.15,
+          letterSpacing: "-0.03em",
+          color: "var(--text-primary)",
+          marginBottom: 12,
         }}>
-          Signal fusion architecture fusing pixel-level error analysis (ELA), encrypted QR cryptographic parsing, OCR discrepancy checks, and automated reason statements.
+          Document Fraud Screening
+        </h1>
+        <p style={{
+          fontSize: 14,
+          color: "var(--text-secondary)",
+          lineHeight: 1.6,
+          maxWidth: 480,
+          margin: "0 auto 24px auto",
+        }}>
+          Verify the authenticity of government-issued identity documents using multi-signal forensic analysis.
         </p>
-
-        {/* Hero CTA Pills */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
           <Link href="/analyze" style={{ textDecoration: "none" }}>
-            <button className="btn-primary" style={{ padding: "12px 28px", fontSize: 14 }}>
-              <ScanLine size={16} />
+            <motion.button
+              className="btn-primary"
+              whileHover={{ scale: 1.03, boxShadow: "0 4px 20px var(--brand-primary-25)" }}
+              whileTap={{ scale: 0.97 }}
+              style={{ padding: "10px 22px", fontSize: 13.5 }}
+            >
+              <ScanLine size={15} />
               <span>Screen Document</span>
-              <ArrowRight size={14} />
-            </button>
+              <ArrowRight size={13} />
+            </motion.button>
           </Link>
           <Link href="/risk-queue" style={{ textDecoration: "none" }}>
-            <button className="btn-secondary" style={{ padding: "12px 26px", fontSize: 14 }}>
-              <AlertTriangle size={15} color="#f59e0b" />
-              <span>Threat Triage Queue</span>
+            <motion.button
+              className="btn-secondary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              style={{ padding: "10px 20px", fontSize: 13.5 }}
+            >
+              <AlertTriangle size={14} color="var(--risk-medium)" />
+              <span>Risk Queue</span>
               {pendingReview > 0 && (
                 <span style={{
-                  background: "rgba(245, 158, 11, 0.2)",
-                  color: "#f59e0b",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: "1px 7px",
-                  borderRadius: "999px",
-                  marginLeft: 4
+                  background: "var(--risk-medium-bg)", color: "var(--risk-medium)",
+                  fontSize: 11, fontWeight: 700, padding: "1px 6px",
+                  borderRadius: "var(--radius-sm)", marginLeft: 2
                 }}>
                   {pendingReview}
                 </span>
               )}
-            </button>
+            </motion.button>
           </Link>
         </div>
+      </motion.section>
 
-        {/* Telemetry Micro-Pill Bar */}
-        <div style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 20,
-          marginTop: 32,
-          padding: "8px 20px",
-          borderRadius: "999px",
-          background: "rgba(15, 21, 34, 0.8)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          fontSize: 12,
-          color: "#64748B",
-          flexWrap: "wrap",
-          justifyContent: "center"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Activity size={13} color="#4272D4" />
-            <span>OCR:</span>
-            <span style={{ color: "#EFF3F8", fontWeight: 600 }}>Tesseract + EasyOCR Dual-Pass</span>
-          </div>
-          <span style={{ opacity: 0.3 }}>•</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Zap size={13} color="#6FCDA9" />
-            <span>Forensics:</span>
-            <span style={{ color: "#EFF3F8", fontWeight: 600 }}>ELA Heatmaps + FFT Noise</span>
-          </div>
-          <span style={{ opacity: 0.3 }}>•</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <CheckCircle2 size={13} color="#28C840" />
-            <span>Ledger:</span>
-            <span style={{ color: "#28C840", fontWeight: 600 }}>SQLite Async DB</span>
-          </div>
-        </div>
-      </section>
+      {/* Carousel */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", mass: 0.8, stiffness: 200, damping: 20, delay: 0.1 }}
+      >
+        <Carousel />
+      </motion.div>
 
-      {/* ── 2. NORDPIXEL SIGNATURE WHITE ISLAND SECTION (.band-light) ── */}
-      <section className="band-light">
+      {/* Stats Strip — Real Data Only */}
+      <motion.section
+        custom={2}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-40px" }}
+        variants={fadeUp}
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}
+      >
+        <StatCard
+          label="Total Screened"
+          value={analytics?.total_documents ?? 0}
+          sub="Documents evaluated"
+          color="var(--brand-primary)"
+        />
+        <StatCard
+          label="High Risk"
+          value={analytics?.high_risk_count ?? 0}
+          sub="Tampering & forgeries blocked"
+          color="var(--risk-high)"
+        />
+        <StatCard
+          label="Pending Review"
+          value={pendingReview}
+          sub="Officer triage queue"
+          color="var(--risk-medium)"
+        />
+        <StatCard
+          label="Mean Risk Score"
+          value={analytics?.average_risk_score ?? "—"}
+          sub="Normalized 0–100"
+          color="var(--risk-low)"
+        />
+      </motion.section>
+
+      {/* Demo Verdicts */}
+      <motion.section
+        custom={3}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-40px" }}
+        variants={fadeUp}
+      >
         <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          gap: 24,
-          marginBottom: 32
+          display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+          marginBottom: 16
         }}>
           <div>
             <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 11.5,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: "#4272D4",
-              marginBottom: 8
+              fontSize: 12, fontWeight: 600, textTransform: "uppercase",
+              letterSpacing: "0.06em", color: "var(--brand-accent)", marginBottom: 4
             }}>
-              <Sparkles size={14} />
-              EXPLAINABLE AI ENGINE
+              Explainable AI
             </div>
-            <h2 style={{
-              fontSize: "clamp(24px, 3.2vw, 36px)",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              color: "#0A0E14",
-              lineHeight: 1.15,
-              margin: 0,
-              fontFamily: "'Poppins', sans-serif"
-            }}>
-              Reasoned Legitimacy Verdicts.
-            </h2>
-            <p style={{ color: "#475569", fontSize: 14.5, marginTop: 6, maxWidth: 640, lineHeight: 1.5 }}>
-              Every verification decision is justified with a human-readable forensic explanation, scoring breakdown, and verifiable cryptographic proof.
-            </p>
+            <h2 className="text-section">Reasoned Legitimacy Verdicts</h2>
           </div>
-
           <Link href="/analyze" style={{ textDecoration: "none" }}>
-            <button style={{
-              background: "#0A0E14",
-              color: "#FFFFFF",
-              borderRadius: "999px",
-              padding: "12px 24px",
-              fontSize: 13.5,
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              transition: "transform 0.2s ease, background 0.2s ease"
-            }}>
-              <span>Test Live Document</span>
-              <ArrowRight size={14} />
-            </button>
+            <motion.button
+              className="btn-secondary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              style={{ fontSize: 12, padding: "7px 14px" }}
+            >
+              Test Live <ArrowRight size={12} />
+            </motion.button>
           </Link>
         </div>
 
-        {/* Interactive Comparison Demo Inside White Island */}
         <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 20
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16
         }}>
-          {/* Sample Verdict 1: LEGITIMATE */}
-          <div style={{
-            background: "#FFFFFF",
-            borderRadius: "24px",
-            padding: "24px",
-            border: "1px solid rgba(16, 185, 129, 0.25)",
-            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.04)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between"
-          }}>
+          {/* Legitimate */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.01 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="glass-card"
+            style={{
+              padding: "18px",
+              display: "flex", flexDirection: "column", justifyContent: "space-between"
+            }}
+          >
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <span style={{
-                  background: "rgba(16, 185, 129, 0.12)",
-                  color: "#059669",
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: "0.05em",
-                  padding: "4px 12px",
-                  borderRadius: "999px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5
+                  background: "var(--risk-low-bg)", color: "var(--risk-low)",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.03em",
+                  padding: "3px 10px", borderRadius: "var(--radius-sm)",
                 }}>
-                  <CheckCircle2 size={13} />
                   CONFIRMED LEGITIMATE
                 </span>
-                <span className="font-mono" style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>
-                  Risk: 08 / 100
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--risk-low)", fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                  Risk: 08/100
                 </span>
               </div>
-
-              <div style={{ fontWeight: 700, fontSize: 16, color: "#0F172A", marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)", marginBottom: 6 }}>
                 Aadhaar e-Identity Card #8821
               </div>
-
-              <p style={{ fontSize: 13, color: "#334155", lineHeight: 1.55, marginBottom: 16 }}>
-                &ldquo;<strong>Verified Authentic.</strong> Digital QR signature decrypted successfully; payload matches OCR extracted name and DOB with 100% fidelity. Visual Error Level Analysis shows zero compression splicing or font alterations.&rdquo;
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 12 }}>
+                Verified authentic. Digital QR signature decrypted successfully; payload matches OCR extracted name and DOB.
               </p>
             </div>
-
             <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 8,
-              paddingTop: 14,
-              borderTop: "1px solid #E2E8F0",
-              fontSize: 11.5
+              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
+              paddingTop: 10, borderTop: "1px solid var(--border-subtle)", fontSize: 12
             }}>
               <div>
-                <div style={{ color: "#64748B" }}>QR Crypt</div>
-                <div style={{ fontWeight: 700, color: "#059669" }}>Valid Match</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 11 }}>QR Crypt</div>
+                <div style={{ fontWeight: 600, color: "var(--risk-low)" }}>Valid Match</div>
               </div>
               <div>
-                <div style={{ color: "#64748B" }}>ELA Tamper</div>
-                <div style={{ fontWeight: 700, color: "#059669" }}>0.0% Splice</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 11 }}>ELA Tamper</div>
+                <div style={{ fontWeight: 600, color: "var(--risk-low)" }}>0.0% Splice</div>
               </div>
               <div>
-                <div style={{ color: "#64748B" }}>Font Grid</div>
-                <div style={{ fontWeight: 700, color: "#059669" }}>Standard</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 11 }}>Font Grid</div>
+                <div style={{ fontWeight: 600, color: "var(--risk-low)" }}>Standard</div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Sample Verdict 2: TAMPERED */}
-          <div style={{
-            background: "#FFFFFF",
-            borderRadius: "24px",
-            padding: "24px",
-            border: "1px solid rgba(244, 63, 94, 0.25)",
-            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.04)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between"
-          }}>
+          {/* Tampered */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.01 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="glass-card"
+            style={{
+              padding: "18px",
+              display: "flex", flexDirection: "column", justifyContent: "space-between"
+            }}
+          >
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <span style={{
-                  background: "rgba(244, 63, 94, 0.12)",
-                  color: "#E11D48",
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: "0.05em",
-                  padding: "4px 12px",
-                  borderRadius: "999px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5
+                  background: "var(--risk-high-bg)", color: "var(--risk-high)",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.03em",
+                  padding: "3px 10px", borderRadius: "var(--radius-sm)",
                 }}>
-                  <AlertTriangle size={13} />
-                  SUSPICIOUS // TAMPERED
+                  TAMPERED
                 </span>
-                <span className="font-mono" style={{ fontSize: 12, fontWeight: 700, color: "#E11D48" }}>
-                  Risk: 88 / 100
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--risk-high)", fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                  Risk: 88/100
                 </span>
               </div>
-
-              <div style={{ fontWeight: 700, fontSize: 16, color: "#0F172A", marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)", marginBottom: 6 }}>
                 Modified Certificate #4419
               </div>
-
-              <p style={{ fontSize: 13, color: "#334155", lineHeight: 1.55, marginBottom: 16 }}>
-                &ldquo;<strong>Potential Forgery Detected.</strong> High-energy pixel variance detected across the name &amp; date coordinates via ELA. Optical character glyphs display mismatched baseline heights indicative of manual photo-editing injection.&rdquo;
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 12 }}>
+                High-energy pixel variance detected across name and date coordinates via ELA.
               </p>
             </div>
-
             <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 8,
-              paddingTop: 14,
-              borderTop: "1px solid #E2E8F0",
-              fontSize: 11.5
+              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
+              paddingTop: 10, borderTop: "1px solid var(--border-subtle)", fontSize: 12
             }}>
               <div>
-                <div style={{ color: "#64748B" }}>QR Crypt</div>
-                <div style={{ fontWeight: 700, color: "#E11D48" }}>Mismatch</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 11 }}>QR Crypt</div>
+                <div style={{ fontWeight: 600, color: "var(--risk-high)" }}>Mismatch</div>
               </div>
               <div>
-                <div style={{ color: "#64748B" }}>ELA Tamper</div>
-                <div style={{ fontWeight: 700, color: "#E11D48" }}>High Energy</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 11 }}>ELA Tamper</div>
+                <div style={{ fontWeight: 600, color: "var(--risk-high)" }}>High Energy</div>
               </div>
               <div>
-                <div style={{ color: "#64748B" }}>Font Grid</div>
-                <div style={{ fontWeight: 700, color: "#E11D48" }}>Shifted</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 11 }}>Font Grid</div>
+                <div style={{ fontWeight: 600, color: "var(--risk-high)" }}>Shifted</div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
-      {/* ── 3. BENTO KPI METRICS STRIP ── */}
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
-        <BentoStatCard
-          label="Total Screened"
-          value={hasRealData ? analytics.total_documents : 100}
-          trend="+18% week"
-          sub="Institutional records ingested"
-          icon={FileCheck}
-          color="#4272D4"
-        />
-        <BentoStatCard
-          label="High Risk Flagged"
-          value={hasRealData ? analytics.high_risk_count : 11}
-          trend="11% rate"
-          sub="Digital tampering & splices blocked"
-          icon={AlertTriangle}
-          color="#f43f5e"
-        />
-        <BentoStatCard
-          label="Pending Triage"
-          value={pendingReview || (hasRealData ? 0 : 2)}
-          sub="Officer manual review queue"
-          icon={Clock}
-          color="#f59e0b"
-        />
-        <BentoStatCard
-          label="Mean Trust Index"
-          value={hasRealData ? `${analytics.average_risk_score}` : "22"}
-          trend="Low Risk"
-          sub="Normalized 0–100 risk score"
-          icon={TrendingUp}
-          color="#10b981"
-        />
-      </section>
-
-      {/* ── 4. ANALYTICS DUAL VISUALIZATION ── */}
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20 }}>
-        {/* Donut Chart: Risk Distribution */}
-        <div className="bento-card" style={{ padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#ffffff" }}>
-                Screening Risk Distribution
-              </div>
-              <div style={{ fontSize: 12, color: "#64748B" }}>
-                Severity classification across evaluated repository
-              </div>
-            </div>
-            {!hasRealData && (
-              <span style={{
-                fontSize: 10, color: "#64748B", background: "rgba(255,255,255,0.06)",
-                padding: "3px 8px", borderRadius: "999px", fontFamily: "JetBrains Mono, monospace"
-              }}>
-                BASELINE
-              </span>
-            )}
-          </div>
-
-          <ResponsiveContainer width="100%" height={210}>
-            <PieChart>
-              <Pie
-                data={PIE_DATA}
-                cx="50%" cy="50%"
-                innerRadius={60} outerRadius={85}
-                dataKey="value" paddingAngle={4}
-                isAnimationActive={false}
-              >
-                {PIE_DATA.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: "#0b1120", border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 8, fontSize: 12, color: "#ffffff"
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-
-          <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 12 }}>
-            {PIE_DATA.map((d, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.color }} />
-                <span style={{ color: "#93A3B8" }}>{d.name}:</span>
-                <span className="font-mono" style={{ color: "#EFF3F8", fontWeight: 700 }}>{d.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bar Chart: Threat Vectors */}
-        <div className="bento-card" style={{ padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#ffffff" }}>
-                Detected Threat Vectors
-              </div>
-              <div style={{ fontSize: 12, color: "#64748B" }}>
-                Algorithmic detection incidence by anomaly class
-              </div>
-            </div>
-            {!hasAnomData && (
-              <span style={{
-                fontSize: 10, color: "#64748B", background: "rgba(255,255,255,0.06)",
-                padding: "3px 8px", borderRadius: "999px", fontFamily: "JetBrains Mono, monospace"
-              }}>
-                BASELINE
-              </span>
-            )}
-          </div>
-
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={ANOM_DATA} layout="vertical" margin={{ left: 10, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-              <XAxis type="number" stroke="#64748B" fontSize={11} />
-              <YAxis dataKey="name" type="category" stroke="#93A3B8" fontSize={11.5} width={150} />
-              <Tooltip
-                contentStyle={{
-                  background: "#0b1120", border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 8, fontSize: 12, color: "#ffffff"
-                }}
-              />
-              <Bar dataKey="value" fill="#4272D4" radius={[0, 6, 6, 0]} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* ── 5. QUICK SIMULATION TEST PRESETS LAB ── */}
-      <section className="bento-card" style={{ padding: "24px 28px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+      {/* Charts — Tabbed */}
+      <motion.section
+        custom={4}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-40px" }}
+        variants={fadeUp}
+        className="bento-card"
+        style={{ padding: 20 }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 11, color: "#4272D4", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              TEST &amp; BENCHMARK
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#FFFFFF" }}>
-              Synthetic Forgery Simulation Lab
-            </div>
+            <div className="text-body" style={{ fontWeight: 600 }}>Analytics Overview</div>
+            <div className="text-caption" style={{ marginTop: 2 }}>Screening telemetry and threat intelligence</div>
           </div>
-          <Link href="/analyze" style={{ textDecoration: "none" }}>
-            <span style={{
-              color: "#4272D4",
-              fontSize: 12.5,
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4
-            }}>
-              Open Forensic Studio <ArrowUpRight size={14} />
-            </span>
-          </Link>
+          <div className="chart-tabs">
+            <ChartTabBtn
+              active={chartTab === "risk"}
+              onClick={() => setChartTab("risk")}
+              icon={<FileCheck size={13} />}
+              label="Risk Distribution"
+            />
+            <ChartTabBtn
+              active={chartTab === "threat"}
+              onClick={() => setChartTab("threat")}
+              icon={<TrendingUp size={13} />}
+              label="Threat Vectors"
+            />
+          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-          {[
-            { id: "authentic", label: "Authentic ID Standard", desc: "UIDAI biometric baseline compliant", risk: "LOW", tag: "AUTHENTIC", color: "#10b981" },
-            { id: "text_tampered", label: "Text Splice Injection", desc: "Modified DOB and name typography", risk: "HIGH", tag: "TAMPER", color: "#f43f5e" },
-            { id: "photo_tampered", label: "Face Patch Replacement", desc: "High ELA energy variance around face", risk: "HIGH", tag: "SPLICE", color: "#f43f5e" },
-            { id: "qr_mismatch", label: "Encrypted QR Conflict", desc: "Payload hash does not match OCR field", risk: "HIGH", tag: "FORGERY", color: "#f59e0b" },
-          ].map(item => (
-            <Link key={item.id} href="/analyze" style={{ textDecoration: "none" }}>
-              <div style={{
-                padding: "16px 18px",
-                borderRadius: "14px",
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.07)",
-                transition: "all 0.2s ease",
-                cursor: "pointer"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "rgba(66, 114, 212, 0.4)";
-                e.currentTarget.style.background = "rgba(66, 114, 212, 0.06)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.07)";
-                e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)";
-              }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: "#EFF3F8" }}>{item.label}</span>
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 800, padding: "2px 7px", borderRadius: "999px",
-                    background: `${item.color}18`,
-                    color: item.color,
-                    border: `1px solid ${item.color}35`,
-                    fontFamily: "JetBrains Mono, monospace"
-                  }}>
-                    {item.tag}
-                  </span>
+        <AnimatePresence mode="wait">
+          {chartTab === "risk" ? (
+            <motion.div
+              key="risk"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              {hasData ? (
+                <>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={PIE_DATA}
+                        cx="50%" cy="50%"
+                        innerRadius={60} outerRadius={90}
+                        dataKey="value" paddingAngle={4}
+                        isAnimationActive={false}
+                      >
+                        {PIE_DATA.map((entry, idx) => (
+                          <Cell key={idx} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: "var(--glass-bg-heavy)",
+                          backdropFilter: "blur(12px)",
+                          border: "1px solid var(--glass-border)",
+                          borderRadius: "var(--radius-md)",
+                          fontSize: 12,
+                          color: "var(--text-primary)",
+                          boxShadow: "var(--shadow-lg)",
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 10 }}>
+                    {PIE_DATA.map((d, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: d.color }} />
+                        <span style={{ color: "var(--text-muted)" }}>{d.name}:</span>
+                        <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>
+                  No documents analyzed yet. Run a demo or upload a document to see risk distribution.
                 </div>
-                <div style={{ fontSize: 11.5, color: "#64748B", lineHeight: 1.4 }}>
-                  {item.desc}
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="threat"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              {anomData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={anomData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
+                    <XAxis type="number" stroke="var(--text-muted)" fontSize={11} />
+                    <YAxis dataKey="name" type="category" stroke="var(--text-secondary)" fontSize={11} width={140} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--glass-bg-heavy)",
+                        backdropFilter: "blur(12px)",
+                        border: "1px solid var(--glass-border)",
+                        borderRadius: "var(--radius-md)",
+                        fontSize: 12,
+                        color: "var(--text-primary)",
+                        boxShadow: "var(--shadow-lg)",
+                      }}
+                    />
+                    <Bar dataKey="value" fill="var(--brand-primary)" radius={[0, 4, 4, 0]} isAnimationActive={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>
+                  No threat vectors detected yet. Analyze documents to populate threat frequencies.
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.section>
 
     </div>
   );

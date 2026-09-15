@@ -218,13 +218,28 @@ async def get_analysis(analysis_id: str, db: AsyncSession = Depends(get_db)):
     finding_res = await db.execute(finding_stmt)
     findings = finding_res.scalars().all()
 
+    # Get original document filename for image display
+    from app.models.document import Document
+    doc_stmt = select(Document).where(Document.id == analysis.document_id)
+    doc_res = await db.execute(doc_stmt)
+    doc = doc_res.scalar_one_or_none()
+    original_filename = doc.filename if doc else None
+
     def _to_dict(obj):
         if hasattr(obj, "__table__"):
             return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
         return obj
 
+    # Compute processing time
+    processing_time = None
+    if analysis.completed_at and analysis.created_at:
+        processing_time = round((analysis.completed_at - analysis.created_at).total_seconds(), 2)
+
     return {
         **_to_dict(analysis),
+        "analysis_id": analysis.id,
         "ocr_fields": [_to_dict(f) for f in ocr_fields],
         "findings": [_to_dict(f) for f in findings],
+        "processing_time_seconds": processing_time,
+        "original_filename": original_filename,
     }

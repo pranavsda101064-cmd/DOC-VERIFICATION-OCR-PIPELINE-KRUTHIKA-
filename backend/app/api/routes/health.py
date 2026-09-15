@@ -27,6 +27,11 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     return {
         "status": "ok" if db_ok else "degraded",
         "ocr_engine": ocr_status.get("primary_engine", "cv_fallback"),
+        "ocr_engines": {
+            "rapidocr": ocr_status.get("rapidocr_available", False),
+            "tesseract": ocr_status.get("tesseract_available", False),
+            "primary": ocr_status.get("primary_engine", "opencv_fallback"),
+        },
         "ml_model_loaded": is_model_loaded(),
         "db_connected": db_ok,
         "pipeline_version": settings.PIPELINE_VERSION,

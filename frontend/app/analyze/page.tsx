@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { DocumentUploader } from "@/components/DocumentUploader";
 import { AnalysisStepper } from "@/components/AnalysisStepper";
@@ -9,9 +9,11 @@ import { OcrFieldsPanel } from "@/components/OcrFieldsPanel";
 import { ReviewModal } from "@/components/ReviewModal";
 import { uploadDocument, pollAnalysis, runDemo, getDemoDocuments, fetchJSON } from "@/lib/api";
 import {
-  ScanLine, Zap, BarChart2, ShieldCheck, QrCode, Shield, RefreshCw,
-  FileText, CheckCircle2, AlertTriangle, Eye, ArrowRight, Layers, FileSearch, Sparkles, XCircle
+  ScanLine, ShieldCheck, Shield, RefreshCw,
+  FileText, CheckCircle2, AlertTriangle, Eye, ArrowRight, Layers, XCircle,
+  Camera, Cpu, Fingerprint, FileCheck
 } from "lucide-react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -22,82 +24,76 @@ function getLegitimacyVerdict(score: number, label: string, findings: any[] = []
   if (score <= 30) {
     return {
       status: "LEGITIMATE",
-      badgeText: "LEGITIMATE / AUTHENTIC",
-      badgeColor: "#10b981",
-      bgColor: "rgba(16, 185, 129, 0.08)",
-      borderColor: "rgba(16, 185, 129, 0.3)",
+      badgeText: "LEGITIMATE",
+      badgeColor: "var(--risk-low)",
+      bgColor: "var(--risk-low-bg)",
+      borderColor: "var(--risk-low-border)",
       title: "Verified Authentic Document",
-      statement: "This document passed all forensic screening checks. Geometry aligns with official government templates, character OCR confidence is high, and pixel compression shows no signs of photo or text tampering.",
+      statement: "This document passed all forensic screening checks. Geometry aligns with official templates, OCR confidence is high, and pixel compression shows no signs of tampering.",
     };
   } else if (score <= 65) {
-    const reasons = criticalFindings.length > 0 
+    const reasons = criticalFindings.length > 0
       ? criticalFindings.map((f: any) => f.title || f.finding_type).slice(0, 2).join(" and ")
-      : "minor layout shifts and reduced OCR character confidence";
+      : "minor layout shifts and reduced OCR confidence";
     return {
       status: "INCONCLUSIVE",
-      badgeText: "SUSPICIOUS / REVIEW REQUIRED",
-      badgeColor: "#f59e0b",
-      bgColor: "rgba(245, 158, 11, 0.08)",
-      borderColor: "rgba(245, 158, 11, 0.3)",
-      title: "Suspicious / Borderline Document",
-      statement: `Automated verification cannot confirm legitimacy with certainty due to ${reasons}. A manual inspection by a human officer is advised.`,
+      badgeText: "REVIEW REQUIRED",
+      badgeColor: "var(--risk-medium)",
+      bgColor: "var(--risk-medium-bg)",
+      borderColor: "var(--risk-medium-border)",
+      title: "Suspicious Document",
+      statement: `Cannot confirm legitimacy due to ${reasons}. Manual inspection advised.`,
     };
   } else {
     let mainReason = "critical forensic anomalies detected";
     if (criticalFindings.length > 0) {
       mainReason = criticalFindings[0].title || criticalFindings[0].description || "unauthorized digital modifications";
     } else if (result?.tamper_score > 0.3) {
-      mainReason = "Error Level Analysis detected digital photo or text tampering";
+      mainReason = "ELA detected digital photo or text tampering";
     } else if (result?.qr_status === "mismatch") {
-      mainReason = "QR code payload directly contradicts the printed text fields";
+      mainReason = "QR code payload contradicts printed text fields";
     }
     return {
       status: "FRAUDULENT",
-      badgeText: "NOT LEGITIMATE / FORGERY DETECTED",
-      badgeColor: "#f43f5e",
-      bgColor: "rgba(244, 63, 94, 0.08)",
-      borderColor: "rgba(244, 63, 94, 0.35)",
-      title: "Document is Not Legitimate (High Risk)",
-      statement: `Security screening failed: ${mainReason}. The document exhibits clear indicators of digital tampering, forgery, or inconsistent formatting.`,
+      badgeText: "FORGERY DETECTED",
+      badgeColor: "var(--risk-high)",
+      bgColor: "var(--risk-high-bg)",
+      borderColor: "var(--risk-high-border)",
+      title: "Document is Not Legitimate",
+      statement: `Screening failed: ${mainReason}. Clear indicators of digital tampering detected.`,
     };
   }
 }
 
 function RiskSignalBar({ signal, raw_score, weight, contribution }: any) {
   const pct = Math.min(100, Math.max(0, Math.round(raw_score)));
-  const color = pct > 65 ? "#f43f5e" : pct > 35 ? "#f59e0b" : "#10b981";
-  
+  const color = pct > 65 ? "var(--risk-high)" : pct > 35 ? "var(--risk-medium)" : "var(--risk-low)";
+
   return (
     <div style={{
-      padding: "10px 14px",
-      background: "rgba(255, 255, 255, 0.02)",
-      borderRadius: 10,
-      border: "1px solid rgba(255, 255, 255, 0.05)",
+      padding: "10px 14px", background: "var(--bg-surface-alt)",
+      borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)",
       marginBottom: 8
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0" }}>
+        <span className="text-body" style={{ fontWeight: 500 }}>
           {signal.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="font-mono" style={{ fontSize: 11, color: "#64748b" }}>
-            Weight: {(weight * 100).toFixed(0)}%
-          </span>
-          <span className="font-mono" style={{
-            fontSize: 12, fontWeight: 700, color,
-            padding: "1px 6px", borderRadius: 4, background: `${color}18`,
-            border: `1px solid ${color}35`
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span className="text-caption">{(weight * 100).toFixed(0)}%</span>
+          <span className="font-mono text-caption" style={{
+            fontWeight: 600, color,
+            padding: "1px 5px", borderRadius: "var(--radius-sm)",
+            background: `color-mix(in srgb, ${color} 10%, transparent)`,
           }}>
-            +{contribution.toFixed(1)} pts
+            +{contribution.toFixed(1)}
           </span>
         </div>
       </div>
-      <div style={{ height: 6, borderRadius: 3, background: "rgba(255, 255, 255, 0.06)", overflow: "hidden" }}>
+      <div style={{ height: 5, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden" }}>
         <div style={{
-          height: "100%", width: `${pct}%`,
-          background: color, borderRadius: 3,
-          boxShadow: `0 0 10px ${color}60`,
-          transition: "width 1s cubic-bezier(0.16, 1, 0.3, 1)",
+          height: "100%", width: `${pct}%`, background: color, borderRadius: 3,
+          transition: "width 0.8s var(--ease-out)",
         }} />
       </div>
     </div>
@@ -115,7 +111,8 @@ function AnalyzeInner() {
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [reviewDone, setReviewDone] = useState<string|null>(null);
-  const [activeTab, setActiveTab] = useState<"findings"|"forensics"|"ocr"|"signals">("findings");
+  const [activeTab, setActiveTab] = useState<"findings"|"forensics"|"ocr"|"signals"|"details">("findings");
+  const [selectedBbox, setSelectedBbox] = useState<number[] | null>(null);
 
   useEffect(() => {
     getDemoDocuments().then(d => setDemoDocs(d.demo_documents || [])).catch(() => {});
@@ -142,7 +139,7 @@ function AnalyzeInner() {
     setPhase("uploading"); setError(null); setResult(null);
     try {
       const data = await runDemo(docName);
-      setResult(data.result || data); setPhase("done");
+      setResult({ ...(data.result || data), analysis_id: data.analysis_id, document_id: data.document_id, original_filename: data.original_filename }); setPhase("done");
     } catch (e: any) {
       setError(e.message); setPhase("error");
     }
@@ -150,65 +147,45 @@ function AnalyzeInner() {
 
   const riskLabel = result?.risk_label || "LOW";
   const riskScore = result?.risk_score ?? 0;
-  const labelColor = riskLabel === "HIGH" ? "#f43f5e" : riskLabel === "MEDIUM" ? "#f59e0b" : "#10b981";
+  const labelColor = riskLabel === "HIGH" ? "var(--risk-high)" : riskLabel === "MEDIUM" ? "var(--risk-medium)" : "var(--risk-low)";
+  const originalImageUrl = result?.original_filename ? `${API}/uploads/${result.original_filename}` : null;
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-      {/* Top Header */}
+    <div>
+      {/* Header */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-        marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid rgba(255,255,255,0.06)"
+        marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)"
       }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.3)",
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
-              <ScanLine size={18} color="#38bdf8" />
-            </div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.3px" }}>
-              Screening Terminal & Analysis Lab
-            </h1>
-          </div>
-          <p style={{ color: "#94a3b8", fontSize: 13 }}>
-            Upload raw government identity scans or launch synthetic vulnerability test cases
-          </p>
+          <h1 className="text-section" style={{ marginBottom: 2 }}>Document Analyzer</h1>
+          <p className="text-caption">Upload a government identity scan or run a test scenario</p>
         </div>
-
         {phase === "done" && (
-          <button
-            onClick={() => { setPhase("idle"); setResult(null); }}
-            className="btn-secondary"
-            style={{ fontSize: 12.5 }}
-          >
-            <RefreshCw size={14} /> Screen New Document
+          <button onClick={() => { setPhase("idle"); setResult(null); setSelectedBbox(null); }} className="btn-secondary" style={{ fontSize: 12 }}>
+            <RefreshCw size={13} /> New Analysis
           </button>
         )}
       </div>
 
       {/* Main Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: phase === "done" ? "360px 1fr" : "1fr 1fr", gap: 24 }}>
-        
-        {/* Left Column: Upload or Stepper */}
+      <div className="analyze-grid" style={{ display: "grid", gridTemplateColumns: phase === "done" ? "320px 1fr" : "1fr 1fr", gap: 20 }}>
+
+        {/* Left: Upload or Stepper */}
         <div>
-          {/* Upload Card */}
-          <div className="glass-card" style={{ padding: 22, marginBottom: 20 }}>
-            <div style={{
-              fontWeight: 800, fontSize: 12, color: "#94a3b8",
-              letterSpacing: "0.6px", textTransform: "uppercase", marginBottom: 14,
-              display: "flex", alignItems: "center", gap: 8
+          <div className="glass-card" style={{ padding: 18, marginBottom: 16 }}>
+            <div className="text-caption" style={{
+              fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 12,
+              display: "flex", alignItems: "center", gap: 6
             }}>
-              <FileText size={15} color="#38bdf8" />
-              Document Ingestion Point
+              <FileText size={14} color="var(--brand-primary)" />
+              Upload
             </div>
             <DocumentUploader onUpload={handleUpload} loading={phase === "uploading" || phase === "polling"} />
           </div>
 
-          {/* Analysis Pipeline Stepper (Visible during or after scan) */}
           {(phase === "polling" || phase === "done") && (
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <AnalysisStepper
                 steps={result?.analysis_steps || []}
                 complete={phase === "done"}
@@ -220,56 +197,43 @@ function AnalyzeInner() {
 
           {error && (
             <div style={{
-              background: "rgba(244, 63, 94, 0.12)",
-              border: "1px solid rgba(244, 63, 94, 0.35)",
-              borderRadius: 12, padding: "16px 18px", color: "#fb7185", fontSize: 13,
-              display: "flex", alignItems: "center", gap: 10
+              background: "var(--risk-high-bg)", border: "1px solid var(--risk-high-border)",
+              borderRadius: "var(--radius-md)", padding: "14px 16px", color: "var(--risk-high)",
+              display: "flex", alignItems: "center", gap: 8
             }}>
-              <AlertTriangle size={18} />
+              <AlertTriangle size={16} />
               <div>
-                <div style={{ fontWeight: 700 }}>Analysis Exception</div>
-                <div style={{ fontSize: 12, color: "#fca5a5" }}>{error}</div>
+                <div className="text-body" style={{ fontWeight: 600 }}>Analysis Error</div>
+                <div className="text-caption" style={{ marginTop: 2, color: "var(--text-secondary)" }}>{error}</div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Column: Demo Scenarios OR Live Results */}
+        {/* Right: Demo or Results */}
         {phase !== "done" ? (
-          /* Preset Vulnerability Lab Cards */
           <div>
-            <div className="glass-card" style={{ padding: 24 }}>
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                marginBottom: 16
-              }}>
+            <div className="glass-card" style={{ padding: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{
-                    fontWeight: 800, fontSize: 14, color: "#f8fafc",
-                    display: "flex", alignItems: "center", gap: 8
-                  }}>
-                    <Zap size={16} color="#fbbf24" />
-                    SIH 2026 Preset Vulnerability Scenarios
-                  </div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                    Click any simulated identity document to test multi-layer signal fusion
-                  </div>
+                  <div className="text-body" style={{ fontWeight: 600 }}>Test Scenarios</div>
+                  <div className="text-caption" style={{ marginTop: 2 }}>Click a preset to test the forensic pipeline</div>
                 </div>
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: "3px 8px",
-                  borderRadius: 6, background: "rgba(251, 191, 36, 0.15)",
-                  color: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)"
+                  fontSize: 10, fontWeight: 600, padding: "2px 7px",
+                  borderRadius: "var(--radius-sm)", background: "rgba(217, 91, 26, 0.08)",
+                  color: "var(--brand-accent)",
                 }}>
-                  Instant Test
+                  Instant
                 </span>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {demoDocs.map((doc: any) => {
                   const rColors: Record<string, { badge: string; text: string; bg: string }> = {
-                    LOW:    { badge: "rgba(16,185,129,0.15)", text: "#34d399", bg: "rgba(16,185,129,0.03)" },
-                    MEDIUM: { badge: "rgba(245,158,11,0.15)",  text: "#fbbf24", bg: "rgba(245,158,11,0.03)" },
-                    HIGH:   { badge: "rgba(244,63,94,0.15)",   text: "#f43f5e", bg: "rgba(244,63,94,0.03)" },
+                    LOW:    { badge: "var(--risk-low-bg)", text: "var(--risk-low)", bg: "rgba(45,138,86,0.02)" },
+                    MEDIUM: { badge: "var(--risk-medium-bg)", text: "var(--risk-medium)", bg: "rgba(198,122,26,0.02)" },
+                    HIGH:   { badge: "var(--risk-high-bg)", text: "var(--risk-high)", bg: "rgba(196,59,59,0.02)" },
                   };
                   const rc = rColors[doc.expected_risk] || rColors.MEDIUM;
 
@@ -278,37 +242,25 @@ function AnalyzeInner() {
                       key={doc.name}
                       onClick={() => handleDemo(doc.name)}
                       className="glass-card glass-card-interactive"
-                      style={{
-                        padding: "14px 16px",
-                        background: rc.bg,
-                        display: "flex", flexDirection: "column", justifyContent: "space-between",
-                        minHeight: 110
-                      }}
+                      style={{ padding: "12px 14px", background: rc.bg, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 100 }}
                     >
                       <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                          <span style={{ fontWeight: 700, fontSize: 13, color: "#f8fafc" }}>
-                            {doc.label}
-                          </span>
-                          <span style={{
-                            fontSize: 10, fontWeight: 800, padding: "2px 7px",
-                            borderRadius: 6, background: rc.badge, color: rc.text,
-                            fontFamily: "JetBrains Mono, monospace"
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                          <span className="text-body" style={{ fontWeight: 600 }}>{doc.label}</span>
+                          <span className="font-mono" style={{
+                            fontSize: 10, fontWeight: 700, padding: "2px 6px",
+                            borderRadius: "var(--radius-sm)", background: rc.badge, color: rc.text,
                           }}>
                             {doc.expected_risk} ~{doc.expected_score}
                           </span>
                         </div>
-                        <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.4 }}>
-                          {doc.description}
-                        </div>
+                        <div className="text-caption" style={{ lineHeight: 1.4 }}>{doc.description}</div>
                       </div>
-
                       <div style={{
-                        display: "flex", alignItems: "center", gap: 4,
-                        color: "#38bdf8", fontSize: 11, fontWeight: 700, marginTop: 10
+                        display: "flex", alignItems: "center", gap: 3,
+                        color: "var(--brand-primary)", fontSize: 11, fontWeight: 600, marginTop: 8
                       }}>
-                        <span>Run Simulation</span>
-                        <ArrowRight size={12} />
+                        <span>Run</span><ArrowRight size={11} />
                       </div>
                     </div>
                   );
@@ -317,101 +269,90 @@ function AnalyzeInner() {
             </div>
           </div>
         ) : (
-          /* Live Results View */
           <div>
-            {/* Hero Risk Summary Card */}
-            <div className="glass-card" style={{
-              padding: "24px", marginBottom: 20,
-              background: "linear-gradient(135deg, rgba(14,22,41,0.85) 0%, rgba(10,15,30,0.95) 100%)",
-              border: `1px solid ${labelColor}30`,
-              boxShadow: `0 8px 30px -5px ${labelColor}20`,
-            }}>
-              <div style={{ display: "flex", gap: 28, alignItems: "center", flexWrap: "wrap" }}>
-                {/* Risk Gauge */}
-                <div style={{ flexShrink: 0 }}>
-                  <RiskGauge score={riskScore} label={riskLabel} size={190} />
-                </div>
-
-                {/* Meta Highlights */}
-                <div style={{ flex: 1, minWidth: 260 }}>
-                  <div style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "3px 10px", borderRadius: 20,
-                    background: "rgba(56, 189, 248, 0.1)",
-                    border: "1px solid rgba(56, 189, 248, 0.25)",
-                    color: "#38bdf8", fontSize: 11, fontWeight: 700, marginBottom: 8
-                  }}>
-                    <Sparkles size={12} />
-                    <span>ANALYSIS COMPLETED IN {result.processing_time_seconds ?? 0.45}s</span>
-                  </div>
-
-                  <h2 style={{ fontSize: 18, fontWeight: 800, color: "#ffffff", marginBottom: 12 }}>
-                    {result.document_type || "Government Identity Document"}
-                  </h2>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-                    <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>Template Match</div>
-                      <div className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: "#f8fafc" }}>
-                        {result.template_similarity ? `${(result.template_similarity * 100).toFixed(0)}%` : "92%"}
-                      </div>
-                    </div>
-                    <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>OCR Confidence</div>
-                      <div className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: "#f8fafc" }}>
-                        {result.ocr_avg_confidence ? `${(result.ocr_avg_confidence * 100).toFixed(0)}%` : "88%"}
-                      </div>
-                    </div>
-                    <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>QR Verification</div>
-                      <div className="font-mono" style={{
-                        fontSize: 13, fontWeight: 700,
-                        color: result.qr_status === "decoded" ? "#34d399" : "#fbbf24"
+            {/* Risk Summary Strip */}
+            <div className="glass-card" style={{ padding: 18, marginBottom: 16, border: `1px solid color-mix(in srgb, ${labelColor} 20%, transparent)` }}>
+              <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                <RiskGauge score={riskScore} label={riskLabel} size={160} />
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                    <h2 className="text-section">{result.document_type || "Identity Document"}</h2>
+                    {result.matched_template && (
+                      <span className="font-mono text-caption" style={{
+                        padding: "2px 8px", borderRadius: "var(--radius-sm)",
+                        background: "var(--brand-primary-06)", color: "var(--brand-primary)", fontWeight: 600
                       }}>
-                        {result.qr_status ? result.qr_status.toUpperCase() : "VERIFIED"}
-                      </div>
-                    </div>
+                        {result.matched_template}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-caption" style={{ marginBottom: 8 }}>
+                    {result.classification_confidence
+                      ? `${(result.classification_confidence * 100).toFixed(0)}% classification confidence`
+                      : "Document classified"}
+                    {result.processing_time_seconds
+                      ? ` · ${result.processing_time_seconds}s`
+                      : ""}
                   </div>
 
-                  {/* Plain-English Legitimacy Statement */}
+                  {/* Quick Stats — 2 rows */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    {[
+                      { label: "Template", value: result.template_similarity ? `${(result.template_similarity * 100).toFixed(0)}%` : "—" },
+                      { label: "OCR", value: result.ocr_avg_confidence ? `${(result.ocr_avg_confidence * 100).toFixed(0)}%` : "—" },
+                      { label: "QR", value: result.qr_status ? result.qr_status.toUpperCase() : "—", color: result.qr_status === "decoded" ? "var(--risk-low)" : "var(--risk-medium)" },
+                    ].map((stat, i) => (
+                      <div key={i} style={{ padding: "8px 10px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface-alt)", border: "1px solid var(--border-subtle)" }}>
+                        <div className="text-caption" style={{ fontWeight: 600, textTransform: "uppercase", fontSize: 10 }}>{stat.label}</div>
+                        <div className="font-mono text-body" style={{ fontWeight: 600, color: stat.color || "var(--text-primary)" }}>{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Extended Stats Row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+                    {[
+                      { label: "Quality", value: result.quality_score != null ? `${result.quality_score.toFixed(0)}/100` : "—" },
+                      { label: "Tamper", value: result.tamper_score != null ? `${(result.tamper_score * 100).toFixed(0)}%` : "—", color: (result.tamper_score || 0) > 0.35 ? "var(--risk-high)" : "var(--risk-low)" },
+                      { label: "Anomaly", value: result.anomaly_label === "ANOMALY_DETECTED" ? "FLAGGED" : (result.anomaly_label || "NORMAL"), color: result.anomaly_label === "ANOMALY_DETECTED" ? "var(--risk-high)" : "var(--risk-low)" },
+                    ].map((stat, i) => (
+                      <div key={i} style={{ padding: "8px 10px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface-alt)", border: "1px solid var(--border-subtle)" }}>
+                        <div className="text-caption" style={{ fontWeight: 600, textTransform: "uppercase", fontSize: 10 }}>{stat.label}</div>
+                        <div className="font-mono text-body" style={{ fontWeight: 600, color: stat.color || "var(--text-primary)" }}>{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Verdict */}
                   {(() => {
                     const verdict = getLegitimacyVerdict(riskScore, riskLabel, result?.findings || [], result);
                     return (
                       <div style={{
-                        marginBottom: 14,
-                        padding: "12px 16px",
-                        borderRadius: 10,
-                        background: verdict.bgColor,
-                        border: `1px solid ${verdict.borderColor}`,
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 12
+                        padding: "10px 14px", borderRadius: "var(--radius-md)",
+                        background: verdict.bgColor, border: `1px solid ${verdict.borderColor}`,
+                        display: "flex", alignItems: "flex-start", gap: 10
                       }}>
                         <div style={{
-                          width: 28, height: 28, borderRadius: 6,
-                          background: `${verdict.badgeColor}20`,
-                          border: `1px solid ${verdict.badgeColor}40`,
+                          width: 24, height: 24, borderRadius: "var(--radius-sm)",
+                          background: `color-mix(in srgb, ${verdict.badgeColor} 15%, transparent)`,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           flexShrink: 0, marginTop: 1
                         }}>
-                          {verdict.status === "LEGITIMATE" && <CheckCircle2 size={16} color={verdict.badgeColor} />}
-                          {verdict.status === "INCONCLUSIVE" && <AlertTriangle size={16} color={verdict.badgeColor} />}
-                          {verdict.status === "FRAUDULENT" && <XCircle size={16} color={verdict.badgeColor} />}
+                          {verdict.status === "LEGITIMATE" && <CheckCircle2 size={14} color={verdict.badgeColor} />}
+                          {verdict.status === "INCONCLUSIVE" && <AlertTriangle size={14} color={verdict.badgeColor} />}
+                          {verdict.status === "FRAUDULENT" && <XCircle size={14} color={verdict.badgeColor} />}
                         </div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: "#ffffff" }}>
-                              {verdict.title}
-                            </span>
-                            <span style={{
-                              fontSize: 9.5, fontWeight: 800, padding: "2px 7px", borderRadius: 10,
-                              background: `${verdict.badgeColor}25`, color: verdict.badgeColor,
-                              fontFamily: "JetBrains Mono, monospace"
+                          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2, flexWrap: "wrap" }}>
+                            <span className="text-body" style={{ fontWeight: 600 }}>{verdict.title}</span>
+                            <span className="font-mono" style={{
+                              fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-sm)",
+                              background: `color-mix(in srgb, ${verdict.badgeColor} 15%, transparent)`, color: verdict.badgeColor,
                             }}>
                               {verdict.badgeText}
                             </span>
                           </div>
-                          <p style={{ margin: 0, fontSize: 12, color: "#cbd5e1", lineHeight: 1.45 }}>
+                          <p className="text-caption" style={{ margin: 0, color: "var(--text-secondary)", lineHeight: 1.45 }}>
                             {verdict.statement}
                           </p>
                         </div>
@@ -419,161 +360,284 @@ function AnalyzeInner() {
                     );
                   })()}
 
-                  {/* Action Buttons */}
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {/* Actions */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
                     {(riskLabel === "MEDIUM" || riskLabel === "HIGH") && !reviewDone ? (
-                      <button
-                        className="btn-primary"
-                        onClick={() => setShowReview(true)}
-                        style={{ fontSize: 13, background: "linear-gradient(135deg, #e11d48, #be123c)" }}
-                      >
-                        <Shield size={15} /> Officer Human-in-the-Loop Review
+                      <button className="btn-primary" onClick={() => setShowReview(true)} style={{ fontSize: 12 }}>
+                        <Shield size={14} /> Officer Review
                       </button>
                     ) : reviewDone ? (
                       <div style={{
-                        padding: "8px 14px", borderRadius: 8,
-                        background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.3)",
-                        color: "#34d399", fontSize: 12.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6
+                        padding: "7px 12px", borderRadius: "var(--radius-sm)",
+                        background: "var(--risk-low-bg)", border: "1px solid var(--risk-low-border)",
+                        color: "var(--risk-low)", fontSize: 12, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5
                       }}>
-                        <CheckCircle2 size={15} /> Decision Recorded: {reviewDone.toUpperCase().replace(/_/g, " ")}
+                        <CheckCircle2 size={14} /> {reviewDone.toUpperCase().replace(/_/g, " ")}
                       </div>
                     ) : (
                       <div style={{
-                        padding: "8px 14px", borderRadius: 8,
-                        background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.3)",
-                        color: "#34d399", fontSize: 12.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6
+                        padding: "7px 12px", borderRadius: "var(--radius-sm)",
+                        background: "var(--risk-low-bg)", border: "1px solid var(--risk-low-border)",
+                        color: "var(--risk-low)", fontSize: 12, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5
                       }}>
-                        <CheckCircle2 size={15} /> Automated Low-Risk Clearance
+                        <CheckCircle2 size={14} /> Automated Clearance
                       </div>
                     )}
-
                     <Link href={`/compare?idA=${result.analysis_id}`} style={{ textDecoration: "none" }}>
-                      <button className="btn-secondary" style={{ fontSize: 12.5 }}>
-                        <FileSearch size={14} /> Compare Diff
-                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12 }}>Compare</button>
                     </Link>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Inspection Tabs */}
-            <div style={{
-              display: "flex", gap: 8, marginBottom: 16,
-              borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 10
-            }}>
+            {/* Tabs */}
+            <div className="chart-tabs" style={{ marginBottom: 14, display: "inline-flex", flexWrap: "wrap" }}>
               {[
-                { id: "findings", label: `Threat Findings (${result.findings?.length || 0})`, icon: AlertTriangle },
-                { id: "forensics", label: "Visual Heatmap", icon: Eye },
-                { id: "signals", label: "Signal Fusion Breakdown", icon: Layers },
-                { id: "ocr", label: `Extracted Fields (${result.ocr_fields?.length || 0})`, icon: FileText },
+                { id: "findings", label: `Findings (${result.findings?.length || 0})`, icon: AlertTriangle },
+                { id: "forensics", label: "Heatmap", icon: Eye },
+                { id: "signals", label: "Signals", icon: Layers },
+                { id: "ocr", label: `Fields (${result.ocr_fields?.length || 0})`, icon: FileText },
+                { id: "details", label: "Details", icon: Cpu },
               ].map(tab => {
                 const Icon = tab.icon;
                 const active = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
+                    className="chart-tab"
+                    data-active={active}
                     onClick={() => setActiveTab(tab.id as any)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8,
-                      padding: "8px 16px", borderRadius: 8,
-                      background: active ? "rgba(56, 189, 248, 0.12)" : "transparent",
-                      border: active ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
-                      color: active ? "#38bdf8" : "#94a3b8",
-                      fontSize: 13, fontWeight: active ? 700 : 500,
-                      cursor: "pointer", transition: "all 0.15s"
-                    }}
+                    style={{ position: "relative" }}
                   >
-                    <Icon size={14} />
-                    <span>{tab.label}</span>
+                    {active && (
+                      <motion.span
+                        layoutId="analyze-tab-pill"
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          borderRadius: "var(--radius-sm)",
+                          background: "var(--bg-surface)",
+                          boxShadow: "var(--shadow-sm)",
+                          zIndex: 0,
+                        }}
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Icon size={14} />
+                      <span>{tab.label}</span>
+                    </span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Tab Contents */}
-            <div className="glass-card" style={{ padding: 20 }}>
-              {activeTab === "findings" && (
-                <FindingsList findings={result.findings || []} />
-              )}
+            {/* Tab Content */}
+            <div className="glass-card" style={{ padding: 18 }}>
+              {activeTab === "findings" && <FindingsList findings={result.findings || []} />}
 
               {activeTab === "signals" && (
                 <div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 14 }}>
-                    Multi-signal risk fusion combining optical, statistical, and algorithmic threat vectors.
-                  </div>
+                  <div className="text-caption" style={{ marginBottom: 12 }}>Multi-signal risk fusion breakdown</div>
                   {(result.risk_breakdown || []).map((rb: any, i: number) => (
-                    <RiskSignalBar
-                      key={i}
-                      signal={rb.signal}
-                      raw_score={rb.raw_score}
-                      weight={rb.weight}
-                      contribution={rb.contribution}
-                    />
+                    <RiskSignalBar key={i} signal={rb.signal} raw_score={rb.raw_score} weight={rb.weight} contribution={rb.contribution} />
                   ))}
+
+                  {/* Additional signal cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 }}>
+                    {result.metadata_anomaly_score != null && (
+                      <div style={{ padding: "10px 14px", background: "var(--bg-surface-alt)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)" }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Metadata Anomaly</div>
+                        <div className="font-mono" style={{ fontSize: 14, fontWeight: 700, color: result.metadata_anomaly_score > 0.3 ? "var(--risk-high)" : "var(--risk-low)" }}>
+                          {(result.metadata_anomaly_score * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                    )}
+                    {result.anomaly_score != null && (
+                      <div style={{ padding: "10px 14px", background: "var(--bg-surface-alt)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)" }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>ML Anomaly Score</div>
+                        <div className="font-mono" style={{ fontSize: 14, fontWeight: 700, color: result.anomaly_label === "ANOMALY_DETECTED" ? "var(--risk-high)" : "var(--risk-low)" }}>
+                          {(result.anomaly_score * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
               {activeTab === "forensics" && (
-                <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                    <div>
-                      <div style={{
-                        fontSize: 11, fontWeight: 700, color: "#94a3b8",
-                        textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8
-                      }}>
-                        Original Ingested Scan
-                      </div>
-                      <div style={{
-                        height: 240, background: "#080c18", borderRadius: 12,
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#64748b", fontSize: 13
-                      }}>
-                        Identity Card Surface Frame
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{
-                        fontSize: 11, fontWeight: 700, color: "#38bdf8",
-                        textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8,
-                        display: "flex", justifyContent: "space-between"
-                      }}>
-                        <span>Error Level Analysis (ELA) Heatmap</span>
-                        <span style={{ color: "#f43f5e" }}>Compression Disparity</span>
-                      </div>
-                      {result.forensic_heatmap_path ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div>
+                    <div className="text-caption" style={{ fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Original Scan</div>
+                    {originalImageUrl ? (
+                      <div style={{ position: "relative" }}>
                         <img
-                          src={`${API}/uploads/${result.forensic_heatmap_path?.split(/[\\/]/).pop()}`}
-                          alt="Forensic Heatmap"
+                          src={originalImageUrl}
+                          alt="Original Document"
                           style={{
-                            width: "100%", height: 240, objectFit: "cover",
-                            borderRadius: 12, border: "1px solid rgba(56, 189, 248, 0.3)",
-                            boxShadow: "0 0 20px rgba(56, 189, 248, 0.15)"
+                            width: "100%", height: 220, objectFit: "contain",
+                            borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)",
+                            background: "var(--bg-surface-alt)",
                           }}
                         />
-                      ) : (
-                        <div style={{
-                          height: 240, background: "#080c18", borderRadius: 12,
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          color: "#64748b", fontSize: 13
-                        }}>
-                          No heatmap generated
-                        </div>
-                      )}
+                        {selectedBbox && (
+                          <div style={{
+                            position: "absolute",
+                            left: `${(selectedBbox[0] / 1000) * 100}%`,
+                            top: `${(selectedBbox[1] / 1000) * 100}%`,
+                            width: `${((selectedBbox[2] - selectedBbox[0]) / 1000) * 100}%`,
+                            height: `${((selectedBbox[3] - selectedBbox[1]) / 1000) * 100}%`,
+                            border: "2px solid var(--brand-accent)",
+                            borderRadius: 4,
+                            background: "rgba(217, 91, 26, 0.1)",
+                            pointerEvents: "none",
+                          }} />
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{
+                        height: 220, background: "var(--bg-surface-alt)", borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-subtle)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <span className="text-caption">Original scan not available</span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-caption" style={{ fontWeight: 600, textTransform: "uppercase", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                      <span>ELA Heatmap</span>
+                      <span style={{ color: "var(--risk-high)" }}>Compression</span>
                     </div>
+                    {result.forensic_heatmap_path ? (
+                      <img
+                        src={`${API}/uploads/${result.forensic_heatmap_path?.split(/[\\/]/).pop()}`}
+                        alt="Forensic Heatmap"
+                        style={{
+                          width: "100%", height: 220, objectFit: "cover",
+                          borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)",
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        height: 220, background: "var(--bg-surface-alt)", borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-subtle)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <span className="text-caption">No heatmap generated</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {activeTab === "ocr" && (
                 <div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
-                    Extracted structured fields with bounding-box coordinate registration.
+                  <div className="text-caption" style={{ marginBottom: 10 }}>Extracted structured fields — click a field to highlight on image</div>
+                  <OcrFieldsPanel
+                    fields={result.ocr_fields || []}
+                    onFieldClick={(bbox) => setSelectedBbox(bbox)}
+                  />
+                </div>
+              )}
+
+              {activeTab === "details" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div className="text-caption" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Full Analysis Details
                   </div>
-                  <OcrFieldsPanel fields={result.ocr_fields || []} />
+
+                  {/* Document Info */}
+                  <DetailSection title="Document Classification" icon={FileCheck}>
+                    <DetailRow label="Document Type" value={result.document_type || "—"} />
+                    <DetailRow label="Matched Template" value={result.matched_template || "—"} mono />
+                    <DetailRow label="Classification Confidence" value={result.classification_confidence ? `${(result.classification_confidence * 100).toFixed(1)}%` : "—"} />
+                  </DetailSection>
+
+                  {/* Quality */}
+                  <DetailSection title="Image Quality" icon={Camera}>
+                    <DetailRow label="Overall Score" value={result.quality_score != null ? `${result.quality_score.toFixed(1)}/100` : "—"} />
+                    {result.quality_details && (
+                      <>
+                        <DetailRow label="Blur Score" value={result.quality_details.blur_score != null ? `${result.quality_details.blur_score.toFixed(1)}` : "—"} />
+                        <DetailRow label="Exposure" value={result.quality_details.exposure_score != null ? `${result.quality_details.exposure_score.toFixed(1)}` : "—"} />
+                        <DetailRow label="Resolution" value={result.quality_details.resolution_score != null ? `${result.quality_details.resolution_score.toFixed(1)}` : "—"} />
+                        <DetailRow label="Skew Angle" value={result.quality_details.skew_angle != null ? `${result.quality_details.skew_angle.toFixed(1)}°` : "—"} />
+                        <DetailRow label="Noise Level" value={result.quality_details.noise_level != null ? `${result.quality_details.noise_level.toFixed(3)}` : "—"} />
+                        <DetailRow label="Acceptable" value={result.quality_details.is_acceptable ? "Yes" : "No"} />
+                      </>
+                    )}
+                  </DetailSection>
+
+                  {/* OCR */}
+                  <DetailSection title="OCR Engine" icon={ScanLine}>
+                    <DetailRow label="Engine" value={result.ocr_engine || result.ocr_status || "—"} mono />
+                    <DetailRow label="Avg Confidence" value={result.ocr_avg_confidence ? `${(result.ocr_avg_confidence * 100).toFixed(1)}%` : "—"} />
+                  </DetailSection>
+
+                  {/* Tamper */}
+                  <DetailSection title="Tamper Analysis" icon={Fingerprint}>
+                    <DetailRow label="Composite Score" value={result.tamper_score != null ? `${(result.tamper_score * 100).toFixed(1)}%` : "—"} color={(result.tamper_score || 0) > 0.35 ? "var(--risk-high)" : "var(--risk-low)"} />
+                    {result.tamper_details?.signals && (
+                      <>
+                        <DetailRow label="ELA (JPEG Block)" value={result.tamper_details.signals.jpeg_block_inconsistency != null ? `${(result.tamper_details.signals.jpeg_block_inconsistency * 100).toFixed(1)}%` : "—"} />
+                        <DetailRow label="Noise Inconsistency" value={result.tamper_details.signals.noise_inconsistency != null ? `${(result.tamper_details.signals.noise_inconsistency * 100).toFixed(1)}%` : "—"} />
+                        <DetailRow label="Edge Irregularity" value={result.tamper_details.signals.edge_irregularity != null ? `${(result.tamper_details.signals.edge_irregularity * 100).toFixed(1)}%` : "—"} />
+                        <DetailRow label="Active Signals" value={String(result.tamper_details.signals.active_signal_count ?? "—")} />
+                      </>
+                    )}
+                    {result.tamper_details?.suspicious_regions?.length > 0 && (
+                      <DetailRow label="Suspicious Regions" value={String(result.tamper_details.suspicious_regions.length)} />
+                    )}
+                  </DetailSection>
+
+                  {/* Anomaly */}
+                  <DetailSection title="ML Anomaly Detection" icon={Cpu}>
+                    <DetailRow label="Label" value={result.anomaly_label || "—"} color={result.anomaly_label === "ANOMALY_DETECTED" ? "var(--risk-high)" : "var(--risk-low)"} />
+                    <DetailRow label="Score" value={result.anomaly_score != null ? `${(result.anomaly_score * 100).toFixed(1)}%` : "—"} />
+                  </DetailSection>
+
+                  {/* Metadata */}
+                  <DetailSection title="Metadata Forensics" icon={FileText}>
+                    <DetailRow label="Anomaly Score" value={result.metadata_anomaly_score != null ? `${(result.metadata_anomaly_score * 100).toFixed(1)}%` : "—"} />
+                    {result.metadata_details && (
+                      <>
+                        {result.metadata_details.software && <DetailRow label="Software Detected" value={result.metadata_details.software} />}
+                        {result.metadata_details.has_exif !== undefined && <DetailRow label="EXIF Present" value={result.metadata_details.has_exif ? "Yes" : "No"} />}
+                        {result.metadata_details.format_info && <DetailRow label="Format" value={result.metadata_details.format_info} />}
+                      </>
+                    )}
+                  </DetailSection>
+
+                  {/* Consistency */}
+                  {result.consistency_details && (
+                    <DetailSection title="Cross-Field Consistency" icon={ShieldCheck}>
+                      {result.consistency_details.inconsistencies != null && (
+                        <DetailRow label="Inconsistencies" value={String(result.consistency_details.inconsistencies)} />
+                      )}
+                      {result.consistency_details.critical_count != null && (
+                        <DetailRow label="Critical" value={String(result.consistency_details.critical_count)} color={result.consistency_details.critical_count > 0 ? "var(--risk-high)" : "var(--risk-low)"} />
+                      )}
+                    </DetailSection>
+                  )}
+
+                  {/* Layout */}
+                  {result.layout_details && (
+                    <DetailSection title="Template Layout" icon={Layers}>
+                      {result.layout_details.shifted_regions != null && <DetailRow label="Shifted Regions" value={String(result.layout_details.shifted_regions)} />}
+                      {result.layout_details.missing_regions != null && <DetailRow label="Missing Regions" value={String(result.layout_details.missing_regions)} />}
+                    </DetailSection>
+                  )}
+
+                  {/* QR */}
+                  {result.qr_details && (
+                    <DetailSection title="QR Analysis" icon={ScanLine}>
+                      <DetailRow label="Status" value={result.qr_status || "—"} />
+                      {result.qr_details.format && <DetailRow label="Format" value={result.qr_details.format} />}
+                      {result.qr_details.payload_summary && <DetailRow label="Payload" value={result.qr_details.payload_summary} />}
+                    </DetailSection>
+                  )}
                 </div>
               )}
             </div>
@@ -581,7 +645,7 @@ function AnalyzeInner() {
         )}
       </div>
 
-      {/* Review Decision Modal */}
+      {/* Review Modal */}
       {showReview && (
         <ReviewModal
           analysisId={result.analysis_id}
@@ -589,19 +653,49 @@ function AnalyzeInner() {
           riskScore={riskScore}
           riskLabel={riskLabel}
           onClose={() => setShowReview(false)}
-          onSubmitted={(decision: string) => {
-            setReviewDone(decision);
-            setShowReview(false);
-          }}
+          onSubmitted={(decision: string) => { setReviewDone(decision); setShowReview(false); }}
         />
       )}
     </div>
   );
 }
 
+/* ── Detail Helpers ────────────────────────────────────────────────────── */
+
+function DetailSection({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
+  return (
+    <div style={{
+      padding: "12px 14px", background: "var(--bg-surface-alt)",
+      borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)"
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em",
+        color: "var(--brand-primary)", marginBottom: 8,
+        display: "flex", alignItems: "center", gap: 6
+      }}>
+        <Icon size={13} /> {title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono, color }: { label: string; value: string; mono?: boolean; color?: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
+      <span className="text-caption" style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span className={mono ? "font-mono" : ""} style={{ fontSize: 12, fontWeight: 500, color: color || "var(--text-primary)" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function AnalyzePage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, color: "#94a3b8" }}>Loading Screening Terminal...</div>}>
+    <Suspense fallback={<div style={{ padding: 40, color: "var(--text-muted)", textAlign: "center" }}>Loading analyzer...</div>}>
       <AnalyzeInner />
     </Suspense>
   );

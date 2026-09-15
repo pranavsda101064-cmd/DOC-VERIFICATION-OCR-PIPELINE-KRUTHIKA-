@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { submitReview } from "@/lib/api";
 import { CheckCircle, XCircle, HelpCircle, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Props {
   analysisId: string;
@@ -18,12 +19,12 @@ export function ReviewModal({ analysisId, documentId, riskScore, riskLabel, onCl
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const labelColor = riskLabel === "HIGH" ? "#f87171" : riskLabel === "MEDIUM" ? "#fbbf24" : "#34d399";
+  const labelColor = riskLabel === "HIGH" ? "var(--risk-high)" : riskLabel === "MEDIUM" ? "var(--risk-medium)" : "var(--risk-low)";
 
   const DECISIONS = [
-    { id: "approve",      label: "APPROVE",         icon: CheckCircle,  color: "#34d399", bg: "rgba(52,211,153,0.1)" },
-    { id: "reject",       label: "REJECT",           icon: XCircle,      color: "#f87171", bg: "rgba(248,113,113,0.1)" },
-    { id: "request_info", label: "REQUEST MORE INFO", icon: HelpCircle,  color: "#fbbf24", bg: "rgba(251,191,36,0.1)" },
+    { id: "approve",      label: "APPROVE",         icon: CheckCircle,  color: "var(--risk-low)", bg: "rgba(45,138,86,0.08)" },
+    { id: "reject",       label: "REJECT",           icon: XCircle,      color: "var(--risk-high)", bg: "rgba(196,59,59,0.08)" },
+    { id: "request_info", label: "REQUEST INFO",     icon: HelpCircle,   color: "var(--risk-medium)", bg: "rgba(198,122,26,0.08)" },
   ];
 
   const handleSubmit = async () => {
@@ -41,84 +42,113 @@ export function ReviewModal({ analysisId, documentId, riskScore, riskLabel, onCl
   };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 1000, backdropFilter: "blur(4px)",
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="glass-card" style={{ width: 480, padding: 28 }}>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-            Human Review
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        style={{
+          position: "fixed", inset: 0,
+          background: "rgba(40, 48, 43, 0.3)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 1000,
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+        }}
+        onClick={e => e.target === e.currentTarget && onClose()}
+      >
+        <motion.div
+          className="glass-card"
+          initial={{ opacity: 0, scale: 0.92, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          style={{ width: 460, padding: 28 }}
+        >
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+              Human Review
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+              Analysis ID: <span className="font-mono" style={{ color: "var(--brand-primary)" }}>{analysisId}</span>
+              {" · "}<span style={{ color: labelColor, fontWeight: 600 }}>
+                {riskLabel} RISK {riskScore}/100
+              </span>
+            </div>
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-            Analysis ID: <span style={{ color: "var(--accent)" }}>{analysisId}</span>
-            {" · "}<span style={{ color: labelColor, fontWeight: 600 }}>
-              {riskLabel} RISK {riskScore}/100
-            </span>
+
+          <div style={{ marginBottom: 8, fontSize: 11, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Decision
           </div>
-        </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {DECISIONS.map(d => {
+              const Icon = d.icon;
+              const active = decision === d.id;
+              return (
+                <motion.button
+                  key={d.id}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setDecision(d.id)}
+                  style={{
+                    flex: 1, padding: "10px 8px",
+                    border: `1.5px solid ${active ? d.color : "var(--border)"}`,
+                    borderRadius: "var(--radius-md)",
+                    background: active ? d.bg : "var(--glass-bg)",
+                    color: active ? d.color : "var(--text-muted)",
+                    cursor: "pointer", transition: "border-color 0.15s, background 0.15s",
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", gap: 4, fontSize: 10,
+                    fontWeight: 700, letterSpacing: "0.5px",
+                  }}
+                >
+                  <Icon size={18} />
+                  {d.label}
+                </motion.button>
+              );
+            })}
+          </div>
 
-        <div style={{ marginBottom: 4, fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>
-          DECISION
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          {DECISIONS.map(d => {
-            const Icon = d.icon;
-            const active = decision === d.id;
-            return (
-              <button
-                key={d.id}
-                onClick={() => setDecision(d.id)}
-                style={{
-                  flex: 1, padding: "10px 8px",
-                  border: `2px solid ${active ? d.color : "var(--border)"}`,
-                  borderRadius: 8, background: active ? d.bg : "transparent",
-                  color: active ? d.color : "var(--text-muted)",
-                  cursor: "pointer", transition: "all 0.15s",
-                  display: "flex", flexDirection: "column",
-                  alignItems: "center", gap: 4, fontSize: 10,
-                  fontWeight: 700, letterSpacing: "0.5px",
-                }}
-              >
-                <Icon size={18} />
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
+          <div style={{ marginBottom: 8, fontSize: 11, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Notes (optional)
+          </div>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Add review notes..."
+            style={{
+              width: "100%", minHeight: 80, padding: "10px 12px",
+              background: "var(--bg-surface-alt)", border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)", color: "var(--text-primary)", fontSize: 13,
+              resize: "vertical", outline: "none",
+              boxSizing: "border-box", fontFamily: "inherit",
+            }}
+          />
 
-        <div style={{ marginBottom: 4, fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>
-          NOTES (optional)
-        </div>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Add review notes..."
-          style={{
-            width: "100%", minHeight: 80, padding: "10px 12px",
-            background: "var(--bg-primary)", border: "1px solid var(--border)",
-            borderRadius: 8, color: "var(--text-primary)", fontSize: 13,
-            resize: "vertical", outline: "none",
-            boxSizing: "border-box",
-          }}
-        />
-
-        <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
-          <button className="btn-secondary" onClick={onClose} style={{ fontSize: 13 }}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            onClick={handleSubmit}
-            disabled={!decision || loading}
-            style={{ fontSize: 13, opacity: !decision ? 0.5 : 1 }}
-          >
-            {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : "Submit Review"}
-          </button>
-        </div>
-      </div>
-      <style>{`@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }`}</style>
-    </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
+            <motion.button
+              className="btn-secondary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={onClose}
+              style={{ fontSize: 13 }}
+            >
+              Cancel
+            </motion.button>
+            <motion.button
+              className="btn-primary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleSubmit}
+              disabled={!decision || loading}
+              style={{ fontSize: 13, opacity: !decision ? 0.5 : 1 }}
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : "Submit Review"}
+            </motion.button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

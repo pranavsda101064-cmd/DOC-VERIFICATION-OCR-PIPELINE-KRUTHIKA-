@@ -1,40 +1,39 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
+import { SplashScreen } from "@/components/SplashScreen";
 
 export const metadata: Metadata = {
-  title: "DocScreen — AI Document Screening | SIH 2026",
+  title: "Abhaya — AI Document Screening | SIH 2026",
   description: "Multi-Layer AI Document Intelligence and Risk Screening System. Signal fusion engine for document authenticity screening.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
       <body>
-        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "var(--bg-primary)" }}>
+        <SplashScreen />
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <Navbar />
           <main style={{
             flex: 1,
             width: "100%",
             maxWidth: "1280px",
             margin: "0 auto",
-            padding: "28px 24px 80px 24px",
+            padding: "32px 24px 80px 24px",
           }}>
             {children}
           </main>
-          
-          {/* NordPixel-style Minimal Swiss Footer */}
-          <footer style={{
-            borderTop: "1px solid rgba(255, 255, 255, 0.07)",
-            padding: "36px 24px",
-            background: "#080b10",
-            marginTop: "auto"
-          }}>
+
+          <footer
+            className="navbar-glass"
+            style={{
+              borderTop: "1px solid var(--glass-border)",
+              padding: "36px 24px",
+              marginTop: "auto",
+              borderRadius: 0,
+            }}
+          >
             <div style={{
               maxWidth: 1240,
               margin: "0 auto",
@@ -45,54 +44,51 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               gap: 20
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{
-                  width: 30, height: 30, borderRadius: "50%",
-                  background: "linear-gradient(135deg, #4272D4 0%, #2F55A6 100%)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 0 12px rgba(66, 114, 212, 0.4)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)"
-                }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L20 6V12C20 17.5 12 22 12 22C12 22 4 17.5 4 12V6L12 2Z" />
-                    <circle cx="12" cy="11" r="2.5" stroke="#ffffff" strokeWidth="1.5" />
-                  </svg>
+                <img
+                  src="/logo/logo.png"
+                  alt="Abhaya"
+                  style={{ width: 30, height: 30, objectFit: "contain" }}
+                />
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: "0.06em", color: "var(--text-primary)", fontFamily: "'Inter', sans-serif" }}>
+                    ABHAYA<span style={{ color: "var(--brand-accent)" }}>.</span>
+                  </span>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.01em" }}>
+                    Where Authenticity Meets Intelligence.
+                  </span>
                 </div>
-                <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "0.08em", color: "#F4F8FD", fontFamily: "'Poppins', sans-serif" }}>
-                  DOCSCREEN<span style={{ color: "#4272D4" }}>.</span>
-                </span>
-                <span style={{ fontSize: 12, color: "#64748B", marginLeft: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 8 }}>
                   Multi-Layer Forensic Screening &amp; Verification Protocol
                 </span>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 24, fontSize: 12, color: "#93A3B8" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 24, fontSize: 12, color: "var(--text-muted)" }}>
                 <span>SIH 2026 Official</span>
-                <span>•</span>
+                <span style={{ opacity: 0.3 }}>|</span>
                 <span>Forensic Protocol Active</span>
-                <span>•</span>
-                <span>Swiss-grade Verification Engine</span>
+                <span style={{ opacity: 0.3 }}>|</span>
+                <span>Verification Engine v2.4</span>
               </div>
             </div>
 
-            {/* Bottom Credits Line */}
             <div style={{
               maxWidth: 1240,
               margin: "18px auto 0 auto",
               paddingTop: "16px",
-              borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+              borderTop: "1px solid var(--border-subtle)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
               gap: 12,
               fontSize: 11.5,
-              color: "#64748B"
+              color: "var(--text-muted)"
             }}>
               <div>
-                This website is built by <span style={{ color: "#F4F8FD", fontWeight: 600 }}>Laxsmi Shree</span>
+                Built by <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Laxsmi Shree</span>
               </div>
               <div>
-                © 2026 DocScreen AI Document Screening. All rights reserved.
+                © 2026 Abhaya AI Document Screening. All rights reserved.
               </div>
             </div>
           </footer>
