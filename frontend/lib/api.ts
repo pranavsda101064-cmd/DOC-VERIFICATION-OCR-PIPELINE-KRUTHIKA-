@@ -6,7 +6,7 @@ const API = typeof window !== "undefined" && (!rawEnv || !rawEnv.startsWith("htt
 
 export async function fetchJSON(path: string, opts?: RequestInit) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for Render cold starts
   try {
     const res = await fetch(`${API}${path}`, {
       ...opts,
@@ -15,7 +15,9 @@ export async function fetchJSON(path: string, opts?: RequestInit) {
     });
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-    return res.json();
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch { throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`); }
   } catch (err: any) {
     clearTimeout(timeoutId);
     throw err;
