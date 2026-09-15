@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 let targetBackend = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-if (!targetBackend.startsWith("http://") && !targetBackend.startsWith("https://")) {
-  targetBackend = `https://${targetBackend}`;
+if (!targetBackend.startsWith("http")) {
+  targetBackend = targetBackend.includes(".")
+    ? `https://${targetBackend}`
+    : `https://${targetBackend}.onrender.com`;
 }
 targetBackend = targetBackend.replace(/\/+$/, "");
 

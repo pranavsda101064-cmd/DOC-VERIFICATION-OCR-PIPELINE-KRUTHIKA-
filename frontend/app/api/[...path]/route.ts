@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const rawBackend = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const BACKEND = rawBackend.startsWith("http") ? rawBackend : `https://${rawBackend}`;
+let BACKEND: string;
+if (rawBackend.startsWith("http")) {
+  BACKEND = rawBackend;
+} else if (rawBackend.includes(".")) {
+  BACKEND = `https://${rawBackend}`;
+} else {
+  BACKEND = `https://${rawBackend}.onrender.com`;
+}
 
 async function proxyRequest(request: NextRequest, path: string) {
   const url = new URL(request.url);
